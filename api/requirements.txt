@@ -1,6 +1,7 @@
-# Root requirements — mirror of backend/requirements.txt.
-# Vercel's Python serverless runtime reads this (or api/requirements.txt) when
-# bundling the api/index.py function. Keep all three in sync.
+# Dependencies for the Vercel Python function (api/index.py).
+# Installed by Vercel's Python runtime with the correct Python version during
+# function bundling — NOT during the Node build phase.
+# NOTE: keep in sync with backend/requirements.txt (mirror on purpose).
 fastapi==0.115.6
 uvicorn[standard]==0.34.0
 sqlalchemy==2.0.36
