@@ -1,6 +1,10 @@
--- Gyan Sathi — Supabase schema helpers
--- Run this in the Supabase SQL Editor once, before starting the backend.
+-- Gyan Sathi — Postgres schema helpers
+-- Works on ANY Postgres with pgvector: Supabase, Neon, RDS, local Docker.
+-- Run this once, before starting the backend.
 -- (Tables themselves are created automatically by the backend via SQLAlchemy.)
+--
+-- ⚠ SECTION 4 is Supabase-only (storage.buckets system schema).
+--   On Neon / RDS / local Postgres: run sections 1–3, SKIP section 4.
 
 -- 1) Enable pgvector
 create extension if not exists vector;
@@ -27,6 +31,8 @@ create index if not exists ix_uploads_student on uploads (student_id);
 create index if not exists ix_subscriptions_student on subscriptions (student_id);
 create index if not exists ix_subscriptions_status on subscriptions (status);
 
--- 4) Storage bucket for uploads (public-read for simple display; tighten if needed)
+-- 4) Storage bucket for uploads — SUPABASE ONLY (Supabase's storage.buckets
+--    system schema does not exist on Neon/RDS/local Postgres — skip it there).
+--    On Neon, uploads are stored on the server filesystem (/tmp on Vercel).
 insert into storage.buckets (id, name, public) values ('uploads', 'uploads', true)
 on conflict (id) do nothing;
