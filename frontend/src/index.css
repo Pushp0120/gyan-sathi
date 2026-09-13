@@ -1,0 +1,89 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --brand-navy: #122948;
+  --brand-orange: #f7941d;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  @apply bg-slate-50 text-navy-900 font-sans antialiased;
+}
+
+/* Markdown answer styling */
+.md-answer {
+  @apply leading-relaxed break-words;
+}
+.md-answer h1,
+.md-answer h2,
+.md-answer h3 {
+  @apply font-bold text-navy-900 mt-4 mb-2;
+}
+.md-answer h1 {
+  @apply text-lg;
+}
+.md-answer h2 {
+  @apply text-base;
+}
+.md-answer p {
+  @apply my-2;
+}
+.md-answer ul {
+  @apply list-disc pl-5 my-2 space-y-1;
+}
+.md-answer ol {
+  @apply list-decimal pl-5 my-2 space-y-1;
+}
+.md-answer code {
+  @apply bg-navy-50 text-navy-800 rounded px-1.5 py-0.5 text-sm font-mono;
+}
+.md-answer pre {
+  @apply bg-navy-950 text-slate-100 rounded-lg p-3 overflow-x-auto my-2 text-sm;
+}
+.md-answer pre code {
+  @apply bg-transparent text-slate-100 p-0;
+}
+.md-answer table {
+  @apply w-full border-collapse my-2 text-sm;
+}
+.md-answer th,
+.md-answer td {
+  @apply border border-navy-100 px-2 py-1 text-left;
+}
+.md-answer blockquote {
+  @apply border-l-4 border-brand-orange pl-3 text-navy-700 my-2;
+}
+.md-answer a {
+  @apply text-brand-blue underline;
+}
+
+/* Scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-navy-200 rounded-full;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* KaTeX display blocks scroll on mobile */
+.katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 4px 0;
+}
+
+/* Bottom nav safe area on iOS */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}

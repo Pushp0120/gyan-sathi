@@ -1,0 +1,49 @@
+# Secrets
+.env
+.env.local
+.env.*.local
+backend/.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+
+# Node
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+vite.log
+
+# Databases / runtime artifacts
+dev.db
+*.db
+*.sqlite
+*.sqlite3
+
+# Editor
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Uploads / generated
+backend/uploads/
+reference-chatbot/
+
+# Build caches
+.vite/
+tsconfig.tsbuildinfo
