@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Database, RefreshCw, Search, Trash2, UploadCloud } from 'lucide-react'
+import { ClipboardPaste, Database, FileUp, RefreshCw, Search, Trash2, UploadCloud } from 'lucide-react'
 import { api } from '../../services/api'
 import type { Chapter, Subject } from '../../types'
 
@@ -37,6 +37,8 @@ export default function AdminKnowledge() {
     source_type: 'curated',
   })
   const [busy, setBusy] = useState(false)
+  const [mode, setMode] = useState<'file' | 'text'>('file')
+  const [pastedText, setPastedText] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<any[]>([])
   const fileRef = useRef<HTMLInputElement>(null)
@@ -70,6 +72,34 @@ export default function AdminKnowledge() {
     fd.append('source_type', form.source_type)
     try {
       await api('/api/admin/knowledge/upload', { method: 'POST', body: fd })
+      setForm({ ...form, title: '' })
+      load()
+    } catch (e: any) {
+      alert(e.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const uploadText = async () => {
+    if (pastedText.trim().length < 50) {
+      alert('ઓછામાં ઓછું 50 અક્ષરોનું લખાણ આપો.')
+      return
+    }
+    setBusy(true)
+    try {
+      await api('/api/admin/knowledge/text', {
+        method: 'POST',
+        body: JSON.stringify({
+          text: pastedText,
+          title: form.title || 'Pasted text',
+          standard: form.standard,
+          subject_id: form.subject_id || null,
+          chapter_id: form.chapter_id || null,
+          source_type: form.source_type,
+        }),
+      })
+      setPastedText('')
       setForm({ ...form, title: '' })
       load()
     } catch (e: any) {
@@ -187,22 +217,60 @@ export default function AdminKnowledge() {
             <option value="curated">ક્યૂરેટેડ</option>
             <option value="demo">ડેમો</option>
           </select>
-          <input
-            ref={fileRef}
-            type="file"
-            hidden
-            accept=".pdf,.txt,.md,.docx"
-            onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])}
-          />
-          <button
-            onClick={() => fileRef.current?.click()}
-            disabled={busy}
-            className="flex items-center gap-2 rounded-xl bg-brand-blue text-white px-4 py-2 text-sm font-semibold disabled:opacity-50"
-          >
-            <UploadCloud size={16} /> {busy ? 'પ્રક્રિયા ચાલુ…' : 'દસ્તાવેજ અપલોડ કરો'}
-          </button>
-          <span className="text-[11px] text-navy-400">PDF, TXT, MD, DOCX — ઓટોમેટિક છૂંકીંગ + embeddings</span>
+          <div className="flex rounded-xl bg-navy-50 p-1 text-xs font-semibold">
+            <button
+              onClick={() => setMode('file')}
+              className={`flex items-center gap-1.5 rounded-lg px-3 py-2 ${mode === 'file' ? 'bg-white shadow-sm text-navy-900' : 'text-navy-400'}`}
+            >
+              <FileUp size={13} /> ફાઇલ
+            </button>
+            <button
+              onClick={() => setMode('text')}
+              className={`flex items-center gap-1.5 rounded-lg px-3 py-2 ${mode === 'text' ? 'bg-white shadow-sm text-navy-900' : 'text-navy-400'}`}
+            >
+              <ClipboardPaste size={13} /> લખાણ
+            </button>
+          </div>
+          {mode === 'file' ? (
+            <>
+              <input
+                ref={fileRef}
+                type="file"
+                hidden
+                accept=".pdf,.txt,.md,.docx"
+                onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])}
+              />
+              <button
+                onClick={() => fileRef.current?.click()}
+                disabled={busy}
+                className="flex items-center gap-2 rounded-xl bg-brand-blue text-white px-4 py-2 text-sm font-semibold disabled:opacity-50"
+              >
+                <UploadCloud size={16} /> {busy ? 'પ્રક્રિયા ચાલુ…' : 'દસ્તાવેજ અપલોડ કરો'}
+              </button>
+              <span className="text-[11px] text-navy-400">PDF, TXT, MD, DOCX — ઓટોમેટિક છૂંકીંગ + embeddings</span>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={uploadText}
+                disabled={busy}
+                className="flex items-center gap-2 rounded-xl bg-brand-blue text-white px-4 py-2 text-sm font-semibold disabled:opacity-50"
+              >
+                <ClipboardPaste size={16} /> {busy ? 'પ્રક્રિયા ચાલુ…' : 'લખાણ ઉમેરો'}
+              </button>
+              <span className="text-[11px] text-navy-400">સિલેબસ / નોંધ / સાર સીધું પેસ્ટ કરો</span>
+            </>
+          )}
         </div>
+        {mode === 'text' && (
+          <textarea
+            value={pastedText}
+            onChange={(e) => setPastedText(e.target.value)}
+            rows={6}
+            placeholder="અહીં પ્રકરણનું લખાણ, સિલેબસ સાર અથવા નોંધ પેસ્ટ કરો…"
+            className="w-full rounded-xl border border-navy-100 px-3 py-2 text-sm"
+          />
+        )}
       </div>
 
       {/* Semantic search */}

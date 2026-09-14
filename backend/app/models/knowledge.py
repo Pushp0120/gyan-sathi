@@ -27,6 +27,7 @@ class KnowledgeDocument(Base):
     academic_year = Column(String(10), default="2026-27")
     language = Column(String(10), default="gu")
     file_name = Column(String(300), default="")
+    raw_text = Column(Text, default="")  # extracted text kept for re-ingestion without the original file
     status = Column(String(20), default="pending", index=True)  # pending|processing|completed|failed
     error_message = Column(Text, default="")
     chunk_count = Column(Integer, default=0)

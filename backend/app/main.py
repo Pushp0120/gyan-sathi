@@ -29,6 +29,12 @@ async def lifespan(app: FastAPI):
             with engine.begin() as conn:
                 conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
         Base.metadata.create_all(bind=engine)
+        # Lightweight migrations for columns added after first release.
+        if settings.database_url.startswith("postgresql"):
+            with engine.begin() as conn:
+                conn.execute(text(
+                    "ALTER TABLE knowledge_documents ADD COLUMN IF NOT EXISTS raw_text TEXT"
+                ))
         logger.info("Database ready (all tables ensured)")
     except Exception:
         created = 0

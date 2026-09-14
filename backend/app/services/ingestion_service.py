@@ -5,7 +5,6 @@ import re
 from sqlalchemy.orm import Session
 
 from app.models.knowledge import KnowledgeChunk, KnowledgeDocument
-from app.services import supabase_service
 from app.services.ai_service import get_ai_provider
 from app.services.embedding_service import embed_texts
 
@@ -126,16 +125,19 @@ def semantic_chunks(text: str, max_chars: int = MAX_CHUNK_CHARS) -> list[dict]:
 
 # ----------------------------------------------------------------- pipeline
 
-def process_document(db: Session, document: KnowledgeDocument, data: bytes, file_type: str) -> int:
-    """Full pipeline for a document. Returns number of chunks stored."""
+def process_text(db: Session, document: KnowledgeDocument, cleaned: str) -> int:
+    """Chunk + embed already-extracted text. Returns number of chunks stored."""
     document.status = "processing"
     db.commit()
 
     try:
-        raw = extract_text(data, file_type)
-        cleaned = clean_text(raw)
-        if len(cleaned) < 20:
+        if len(clean_text(cleaned)) < 20:
             raise ValueError("દસ્તાવેજમાં પૂરતો ટેક્સ્ટ મળ્યો નથી.")
+
+        # Keep the extracted text (with [[page:N]] markers) so re-ingestion and
+        # re-embedding never need the original file — essential on serverless,
+        # where the filesystem is ephemeral.
+        document.raw_text = cleaned[:2_000_000]
 
         # Clear old chunks if re-ingesting
         db.query(KnowledgeChunk).filter(KnowledgeChunk.document_id == document.id).delete()
@@ -207,19 +209,21 @@ def process_document(db: Session, document: KnowledgeDocument, data: bytes, file
         raise
 
 
-def fetch_document_bytes(doc: KnowledgeDocument) -> tuple[bytes, str]:
-    """Load stored file bytes + type (from Supabase Storage or local disk)."""
-    if doc.storage_object:
-        client = supabase_service.get_client()
-        if client:
-            blob = client.storage.from_(doc.storage_bucket).download(doc.storage_object)
-            ftype = (doc.file_name or "").rsplit(".", 1)[-1].lower()
-            return blob, ftype
+def process_document(db: Session, document: KnowledgeDocument, data: bytes, file_type: str) -> int:
+    """Extract text from raw file bytes, then run the full pipeline."""
+    cleaned = clean_text(extract_text(data, file_type))
+    return process_text(db, document, cleaned)
+
+
+def fetch_document_text(doc: KnowledgeDocument) -> str:
+    """Text to (re)ingest from: DB-stored extracted text, local file, or storage."""
+    if getattr(doc, "raw_text", None):
+        return doc.raw_text
     if doc.stored_path:
         import os
 
         with open(doc.stored_path, "rb") as f:
             data = f.read()
         ftype = (doc.file_name or "").rsplit(".", 1)[-1].lower()
-        return data, ftype
-    raise ValueError("દસ્તાવેજની ફાઇલ મળી નથી.")
+        return clean_text(extract_text(data, ftype))
+    raise ValueError("દસ્તાવેજનું લખાણ મળ્યું નથી — ફાઇલ ફરી અપલોડ કરો.")

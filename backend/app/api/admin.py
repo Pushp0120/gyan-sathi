@@ -243,14 +243,40 @@ async def upload_knowledge(
     return {"ok": True, "document": doc.to_dict(), "chunks": chunks}
 
 
+@router.post("/knowledge/text")
+def ingest_text(body: dict, db: Session = Depends(get_db)):
+    """Ingest pasted text (syllabus, notes, chapter summaries) without a file."""
+    text = str(body.get("text") or "").strip()
+    if len(text) < 50:
+        raise HTTPException(400, "ઓછામાં ઓછું 50 અક્ષરોનું લખાણ આપો.")
+    doc = KnowledgeDocument(
+        title=str(body.get("title") or "Pasted text")[:300],
+        source_type=str(body.get("source_type") or "curated"),
+        standard=int(body.get("standard") or 10),
+        subject_id=body.get("subject_id") or None,
+        chapter_id=body.get("chapter_id") or None,
+        academic_year=str(body.get("academic_year") or "2026-27"),
+        language=str(body.get("language") or "gu"),
+        file_name="", status="pending",
+    )
+    db.add(doc)
+    db.commit()
+    db.refresh(doc)
+    try:
+        chunks = ingestion_service.process_text(db, doc, text)
+    except Exception as exc:
+        raise HTTPException(422, f"પ્રક્રિયા નિષ્ફળ: {str(exc)[:200]}")
+    return {"ok": True, "document": doc.to_dict(), "chunks": chunks}
+
+
 @router.post("/knowledge/{doc_id}/reprocess")
 def reprocess_document(doc_id: str, db: Session = Depends(get_db)):
     doc = db.query(KnowledgeDocument).filter(KnowledgeDocument.id == doc_id).first()
     if not doc:
         raise HTTPException(404, "દસ્તાવેજ મળ્યો નથી.")
     try:
-        data, ftype = ingestion_service.fetch_document_bytes(doc)
-        chunks = ingestion_service.process_document(db, doc, data, ftype)
+        text = ingestion_service.fetch_document_text(doc)
+        chunks = ingestion_service.process_text(db, doc, text)
         return {"ok": True, "chunks": chunks, "document": doc.to_dict()}
     except Exception as exc:
         raise HTTPException(422, f"પ્રક્રિયા નિષ્ફળ: {str(exc)[:200]}")
@@ -296,9 +322,10 @@ def knowledge_search(body: KnowledgeSearchRequest, db: Session = Depends(get_db)
         return {"results": [dict(r._mapping) for r in rows]}
     qvec = embed_query(body.query)
     vec_literal = "[" + ",".join(f"{x:.6f}" for x in qvec) + "]"
-    sql = """
+    distance_expr = "embedding::halfvec(2048) <=> CAST(:vec AS halfvec)"
+    sql = f"""
         SELECT content, standard, subject_name_gu, chapter_name_gu, page_number,
-               section, source, embedding <=> :vec::vector AS distance
+               section, source, {distance_expr} AS distance
         FROM knowledge_chunks
         WHERE is_enabled = true AND embedding IS NOT NULL
     """
@@ -306,9 +333,9 @@ def knowledge_search(body: KnowledgeSearchRequest, db: Session = Depends(get_db)
     if body.standard:
         sql += " AND standard = :std"
         params["std"] = body.standard
-    sql += " ORDER BY embedding <=> :vec::vector LIMIT :k"
+    sql += f" ORDER BY {distance_expr} LIMIT :k"
     params["k"] = body.top_k
-    rows = db.execute(sql, params)
+    rows = db.execute(text_sql(sql), params)
     return {"results": [dict(r._mapping) for r in rows]}
 
 
