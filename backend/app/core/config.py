@@ -55,7 +55,10 @@ class Settings(BaseSettings):
     razorpay_key_secret: str = ""
     payment_mode: str = "sandbox"  # sandbox | live
 
-    # Direct SMTP email OTP (optional — enables auth without Supabase)
+    # Direct email OTP (optional — enables auth without Supabase).
+    # Two delivery paths: Brevo HTTPS API (BREVO_API_KEY, preferred on serverless —
+    # no IP restrictions, no SMTP ports) or classic SMTP (Brevo/Gmail/any provider).
+    brevo_api_key: str = ""
     smtp_host: str = ""
     smtp_port: int = 465
     smtp_user: str = ""

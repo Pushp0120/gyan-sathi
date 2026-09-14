@@ -57,8 +57,59 @@ def verify_otp(email: str, code: str) -> dict:
     return {"ok": False, "error": f"OTP ખોટો છે. {left} પ્રયાસ બાકી."}
 
 
+def _send_via_brevo_api(email: str, code: str) -> dict | None:
+    """Send via Brevo HTTPS API (no IP restrictions, ideal for serverless).
+    Returns None if BREVO_API_KEY is not configured."""
+    if not settings.brevo_api_key:
+        return None
+    import requests
+
+    sender = settings.smtp_from_email or "gyansathi@example.com"
+    payload = {
+        "sender": {"name": settings.smtp_from_name or "Gyan Sathi", "email": sender},
+        "to": [{"email": email}],
+        "subject": f"{code} — Gyan Sathi લોગ ઇન કોડ",
+        "textContent": (
+            f"નમસ્તે!\n\nતમારો Gyan Sathi લોગ ઇન કોડ: {code}\n\n"
+            f"આ કોડ {settings.otp_expire_minutes} મિનિટ માટે માન્ય છે.\n"
+            "જો તમે આ વિનંતી કરી નથી, તો આ ઈમેલ અવગણો.\n\n— Gyan Sathi"
+        ),
+        "htmlContent": (
+            f'''<div style="font-family:sans-serif;max-width:480px;margin:auto;text-align:center;
+      border:1px solid #e2e8f0;border-radius:16px;padding:32px">
+  <h2 style="color:#122948;margin:0">Gyan Sathi</h2>
+  <p style="color:#64748b;font-size:14px">તમારો અભ્યાસ, અમારો સાથી</p>
+  <p style="color:#334155">તમારો લોગ ઇન કોડ:</p>
+  <p style="font-size:36px;font-weight:800;letter-spacing:8px;color:#1B62B5;margin:12px 0">{code}</p>
+  <p style="color:#94a3b8;font-size:12px">{settings.otp_expire_minutes} મિનિટ માટે માન્ય ·
+     જો તમે વિનંતી કરી નથી તો આ ઈમેલ અવગણો.</p>
+</div>'''
+        ),
+    }
+    try:
+        resp = requests.post(
+            "https://api.brevo.com/v3/smtp/email",
+            headers={"api-key": settings.brevo_api_key,
+                     "Content-Type": "application/json",
+                     "accept": "application/json"},
+            json=payload, timeout=15,
+        )
+        if resp.status_code in (200, 201, 202):
+            logger.info("OTP email sent via Brevo API to %s", email)
+            return {"sent": True}
+        logger.error("Brevo API failed: %s %s", resp.status_code, resp.text[:200])
+        return {"sent": False, "reason": f"brevo_api_{resp.status_code}: {resp.text[:120]}"}
+    except Exception as exc:
+        logger.error("Brevo API error: %s", exc)
+        return {"sent": False, "reason": str(exc)[:200]}
+
+
 def send_otp_email(email: str, code: str) -> dict:
-    """Send the OTP email via configured SMTP. Returns {sent: bool, reason?}."""
+    """Send the OTP email via Brevo API (preferred) or SMTP. Returns {sent: bool, reason?}."""
+    via_api = _send_via_brevo_api(email, code)
+    if via_api is not None:
+        return via_api
+
     if not settings.smtp_host or not settings.smtp_user:
         return {"sent": False, "reason": "smtp_not_configured"}
 
