@@ -109,15 +109,20 @@ def retrieve_chunks(
             where.append("(c.chapter_id = :cid OR c.chapter_id IS NULL)")
             params["cid"] = chapter_id
 
+        # NOTE: never write ":param::type" in text() — SQLAlchemy's parser drops
+        # the bind param when a PG cast follows it. Use CAST(:param AS type).
+        # halfvec comparison matches the HNSW index (embeddings are 2048-dim,
+        # above ivfflat's 2000-dim cap).
+        distance_expr = "c.embedding::halfvec(2048) <=> CAST(:vec AS halfvec)"
         sql = sql_text(f"""
             SELECT c.id, c.document_id, c.content, c.standard, c.subject_name_gu,
                    c.chapter_name_gu, c.chapter_number, c.page_number, c.section,
                    c.source, c.academic_year, c.source_type,
-                   c.embedding <=> :vec::vector AS distance
+                   {distance_expr} AS distance
             FROM knowledge_chunks c
             JOIN knowledge_documents d ON d.id = c.document_id
             WHERE {' AND '.join(where)}
-            ORDER BY c.embedding <=> :vec::vector
+            ORDER BY {distance_expr}
             LIMIT :k
         """)
         rows = db.execute(sql, params)
@@ -125,6 +130,9 @@ def retrieve_chunks(
         for r in results:
             r["distance"] = float(r["distance"]) if r["distance"] is not None else 1.0
     except Exception as exc:
+        # The failed statement aborted the session's transaction — roll back
+        # before reusing it, or the keyword fallback below fails too.
+        db.rollback()
         logger.warning("Vector search failed (%s); using keyword fallback", exc)
         results = _fallback_keyword_search(db, question, top_k)
 
