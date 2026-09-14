@@ -47,3 +47,5 @@ reference-chatbot/
 # Build caches
 .vite/
 tsconfig.tsbuildinfo
+.vercel
+.env*
