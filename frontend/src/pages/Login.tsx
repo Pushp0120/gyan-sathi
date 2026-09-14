@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { KeyRound, Mail, Timer } from 'lucide-react'
+import { KeyRound, Lock, Mail, Timer } from 'lucide-react'
 import Logo from '../components/Logo'
 import { api } from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
@@ -15,7 +15,7 @@ export default function Login() {
   const [otpSent, setOtpSent] = useState(false)
   const [otp, setOtp] = useState('')
   const [devMode, setDevMode] = useState(false)
-  const [passwordMode, setPasswordMode] = useState(false)
+  const [tab, setTab] = useState<'otp' | 'password'>('otp')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [info, setInfo] = useState('')
@@ -108,55 +108,82 @@ export default function Login() {
         <div className="bg-white rounded-2xl shadow-card p-6 space-y-4">
           {!otpSent ? (
             <>
-              <div>
-                <label className="text-sm font-medium text-navy-700">ઈમેલ</label>
-                <div className="mt-1 flex items-center rounded-xl border border-navy-100 px-3 focus-within:border-brand-blue">
-                  <Mail size={18} className="text-navy-300" />
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="tamaru@email.com"
-                    className="w-full bg-transparent px-2 py-2.5 text-sm outline-none"
-                  />
-                </div>
-              </div>
-              <button
-                onClick={sendOtp}
-                disabled={!email || busy}
-                className="w-full rounded-xl bg-brand-blue text-white py-2.5 text-sm font-semibold hover:bg-navy-800 disabled:opacity-50"
-              >
-                {busy ? 'મોકલી રહ્યા છીએ…' : 'OTP મોકલો'}
-              </button>
-              <div className="text-center text-xs text-navy-400">
-                એકદમ નવા છો?{' '}
-                <Link to="/signup" className="text-brand-blue font-semibold">
-                  સાઇન અપ કરો
-                </Link>
-              </div>
-              <div className="text-center">
+              {/* Login method tabs */}
+              <div className="flex rounded-xl bg-navy-50 p-1 text-xs font-semibold">
                 <button
-                  onClick={() => setPasswordMode(!passwordMode)}
-                  className="text-xs text-navy-400 underline"
+                  onClick={() => setTab('otp')}
+                  className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 ${tab === 'otp' ? 'bg-white shadow-sm text-navy-900' : 'text-navy-400'}`}
                 >
-                  {passwordMode ? 'OTP થી લોગ ઇન કરો' : 'એડમિન/પાસવર્ડ થી લોગ ઇન'}
+                  <Mail size={13} /> OTP થી લોગ ઇન
+                </button>
+                <button
+                  onClick={() => setTab('password')}
+                  className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 ${tab === 'password' ? 'bg-white shadow-sm text-navy-900' : 'text-navy-400'}`}
+                >
+                  <Lock size={13} /> પાસવર્ડ થી લોગ ઇન
                 </button>
               </div>
-              {passwordMode && (
-                <div className="space-y-3 border-t border-navy-100 pt-4">
-                  <input
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="પાસવર્ડ"
-                    className="w-full rounded-xl border border-navy-100 px-3 py-2.5 text-sm outline-none focus:border-brand-blue"
-                  />
+              {tab === 'otp' ? (
+                <>
+                  <div>
+                    <label className="text-sm font-medium text-navy-700">ઈમેલ</label>
+                    <div className="mt-1 flex items-center rounded-xl border border-navy-100 px-3 focus-within:border-brand-blue">
+                      <Mail size={18} className="text-navy-300" />
+                      <input
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="tamaru@email.com"
+                        className="w-full bg-transparent px-2 py-2.5 text-sm outline-none"
+                      />
+                    </div>
+                  </div>
+                  <button
+                    onClick={sendOtp}
+                    disabled={!email || busy}
+                    className="w-full rounded-xl bg-brand-blue text-white py-2.5 text-sm font-semibold hover:bg-navy-800 disabled:opacity-50"
+                  >
+                    {busy ? 'મોકલી રહ્યા છીએ…' : 'OTP મોકલો'}
+                  </button>
+                  <div className="text-center text-xs text-navy-400">
+                    એકદમ નવા છો?{' '}
+                    <Link to="/signup" className="text-brand-blue font-semibold">
+                      સાઇન અપ કરો
+                    </Link>
+                  </div>
+                </>
+              ) : (
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-sm font-medium text-navy-700">ઈમેલ</label>
+                    <div className="mt-1 flex items-center rounded-xl border border-navy-100 px-3 focus-within:border-brand-blue">
+                      <Mail size={18} className="text-navy-300" />
+                      <input
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="admin@gyansathi.in"
+                        className="w-full bg-transparent px-2 py-2.5 text-sm outline-none"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-navy-700">પાસવર્ડ</label>
+                    <input
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && email && password && loginPassword()}
+                      placeholder="••••••••"
+                      className="mt-1 w-full rounded-xl border border-navy-100 px-3 py-2.5 text-sm outline-none focus:border-brand-blue"
+                    />
+                  </div>
                   <button
                     onClick={loginPassword}
                     disabled={!email || !password || busy}
                     className="w-full rounded-xl bg-navy-900 text-white py-2.5 text-sm font-semibold hover:bg-navy-800 disabled:opacity-50"
                   >
-                    લોગ ઇન
+                    {busy ? 'લોગ ઇન થાય છે…' : 'લોગ ઇન'}
                   </button>
                 </div>
               )}
