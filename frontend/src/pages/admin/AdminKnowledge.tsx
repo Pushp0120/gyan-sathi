@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ClipboardPaste, Database, FileUp, RefreshCw, Search, Trash2, UploadCloud } from 'lucide-react'
+import { AlertTriangle, BookOpen, CheckCircle2, ClipboardPaste, Database, FileUp, Layers, RefreshCw, Search, Trash2, UploadCloud } from 'lucide-react'
 import { api } from '../../services/api'
 import type { Chapter, Subject } from '../../types'
 
@@ -25,6 +25,20 @@ const STATUS_STYLE: Record<string, string> = {
   failed: 'bg-red-100 text-red-600',
 }
 
+interface BulkChapter {
+  id: string; number: number; name_gu: string; name_en: string | null
+  has_textbook: boolean; has_notes: boolean; doc_count: number
+}
+interface BulkSubject { id: string; name_gu: string; name_en: string; chapters: BulkChapter[] }
+interface BulkMatch {
+  file: string; chapter_id: string | null; chapter_number: number | null
+  chapter_name_gu: string | null; subject_id: string | null; subject_name_gu: string | null
+  confidence: number; confident: boolean
+}
+interface BulkResult { file: string | null; ok: boolean; chunks: number; error: string | null; retired_docs: number }
+interface CoverageChapter { id: string; number: number; name_gu: string; subject_gu: string; textbook_chunks: number }
+interface Coverage { total_chapters: number; textbook_chapters: number; chapters: CoverageChapter[] }
+
 export default function AdminKnowledge() {
   const [docs, setDocs] = useState<Doc[]>([])
   const [subjects, setSubjects] = useState<Subject[]>([])
@@ -43,6 +57,87 @@ export default function AdminKnowledge() {
   const [searchResults, setSearchResults] = useState<any[]>([])
   const fileRef = useRef<HTMLInputElement>(null)
 
+  // ---- Bulk textbook import state
+  const [candidates, setCandidates] = useState<BulkSubject[]>([])
+  const [bulkFiles, setBulkFiles] = useState<File[]>([])
+  const [bulkMatches, setBulkMatches] = useState<BulkMatch[]>([])
+  const [matching, setMatching] = useState(false)
+  const [importing, setImporting] = useState(false)
+  const [bulkResults, setBulkResults] = useState<BulkResult[]>([])
+  const [coverage, setCoverage] = useState<Coverage | null>(null)
+  const bulkRef = useRef<HTMLInputElement>(null)
+
+  const loadBulkMeta = useCallback(() => {
+    api<{ subjects: BulkSubject[] }>('/api/admin/bulk/candidates?standard=10')
+      .then((r) => setCandidates(r.subjects)).catch(() => {})
+    api<Coverage>('/api/admin/bulk/coverage?standard=10')
+      .then(setCoverage).catch(() => {})
+  }, [])
+
+  const pickBulkFiles = async (files: FileList | null) => {
+    const arr = Array.from(files || []).filter((f) => /\.(pdf|txt|md|docx)$/i.test(f.name))
+    setBulkFiles(arr); setBulkResults([])
+    if (!arr.length) { setBulkMatches([]); return }
+    setMatching(true)
+    try {
+      const r = await api<{ matches: BulkMatch[] }>('/api/admin/bulk/match', {
+        method: 'POST',
+        body: JSON.stringify({ files: arr.map((f) => f.name), standard: 10 }),
+      })
+      setBulkMatches(r.matches)
+    } catch (e: any) {
+      alert(e.message)
+    } finally {
+      setMatching(false)
+    }
+  }
+
+  const setChapterOverride = (idx: number, chapterId: string) => {
+    setBulkMatches((ms) => ms.map((m, j) => {
+      if (j !== idx) return m
+      if (!chapterId) {
+        return { ...m, chapter_id: null, chapter_number: null, chapter_name_gu: null, subject_id: null, subject_name_gu: null, confident: false }
+      }
+      for (const s of candidates) {
+        const ch = s.chapters.find((c) => c.id === chapterId)
+        if (ch) {
+          return { ...m, chapter_id: chapterId, chapter_number: ch.number, chapter_name_gu: ch.name_gu, subject_id: s.id, subject_name_gu: s.name_gu, confident: true }
+        }
+      }
+      return m
+    }))
+  }
+
+  const runBulkImport = async () => {
+    const pairs = bulkFiles
+      .map((f, i) => ({ f, id: bulkMatches[i]?.chapter_id || null }))
+      .filter((p): p is { f: File; id: string } => !!p.id)
+    if (!pairs.length) {
+      alert('દરેક ફાઇલને પ્રકરણ ફાળવો, પછી આયાત કરો.')
+      return
+    }
+    if (!confirm(`${pairs.length} ફાઇલ આયાત થશે. જે પ્રકરણોમાં પાઠ્યપુસ્તક છે તે સ્કિપ થશે. ચાલુ રાખવું?`)) return
+    setImporting(true); setBulkResults([])
+    try {
+      const fd = new FormData()
+      const ids: string[] = []
+      pairs.forEach((p) => { fd.append('files', p.f); ids.push(p.id) })
+      fd.append('chapter_ids', JSON.stringify(ids))
+      fd.append('standard', '10')
+      fd.append('doc_type', 'textbook')
+      fd.append('replace', 'true')
+      const r = await api<{ succeeded: number; results: BulkResult[] }>('/api/admin/bulk/ingest', {
+        method: 'POST', body: fd,
+      })
+      setBulkResults(r.results)
+      loadBulkMeta(); load()
+    } catch (e: any) {
+      alert(e.message)
+    } finally {
+      setImporting(false)
+    }
+  }
+
   const load = useCallback(() => {
     api<{ documents: Doc[] }>('/api/admin/knowledge')
       .then((r) => setDocs(r.documents))
@@ -51,8 +146,9 @@ export default function AdminKnowledge() {
 
   useEffect(() => {
     load()
+    loadBulkMeta()
     api<{ subjects: Subject[] }>('/api/subjects').then((r) => setSubjects(r.subjects)).catch(() => {})
-  }, [load])
+  }, [load, loadBulkMeta])
 
   useEffect(() => {
     if (!form.subject_id) return setChapters([])
@@ -147,6 +243,111 @@ export default function AdminKnowledge() {
   return (
     <div className="p-4 md:p-6 space-y-4">
       <h1 className="text-lg font-bold text-navy-900">જ્ઞાન કોશ (Knowledge Base)</h1>
+
+      {/* Textbook coverage */}
+      {coverage && (
+        <div className="bg-white rounded-2xl shadow-card p-4">
+          <div className="flex items-center justify-between text-sm">
+            <div className="font-semibold text-navy-900">પાઠ્યપુસ્તક કવરેજ (ધોરણ 10)</div>
+            <div className="text-navy-500">
+              {coverage.textbook_chapters}/{coverage.total_chapters} પ્રકરણ પાઠ્યપુસ્તક સાથે
+            </div>
+          </div>
+          <div className="mt-2 h-2 rounded-full bg-navy-50 overflow-hidden">
+            <div
+              className="h-full bg-brand-blue transition-all"
+              style={{ width: `${coverage.total_chapters ? Math.round((100 * coverage.textbook_chapters) / coverage.total_chapters) : 0}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Bulk textbook import */}
+      <div className="bg-white rounded-2xl shadow-card p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <Layers size={18} className="text-brand-blue" />
+          <div className="font-semibold text-navy-900 text-sm">બલ્ક આયાત — પાઠ્યપુસ્તક PDFs</div>
+        </div>
+        <p className="text-xs text-navy-400">
+          ફાઇલના નામમાં વિષય અને પ્રકરણ નંબર હોવો જોઈએ (દા.ત.{' '}
+          <span className="font-mono">Science-CH-10.pdf</span>). સિસ્ટમ આપોઆપ પ્રકરણ શોધી લેશે —
+          જરૂર પડે તો નીચેથી બદલી શકાય. દરેક PDFમાં ફક્ત એક જ પ્રકરણ હોવું જોઈએ. અપલોડ થતાં
+          જૂની AI નોંધો બંધ થઈ જશે (ડિલીટ નહીં).
+        </p>
+        <input
+          ref={bulkRef}
+          type="file"
+          hidden
+          multiple
+          accept=".pdf,.txt,.md,.docx"
+          onChange={(e) => pickBulkFiles(e.target.files)}
+        />
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={() => bulkRef.current?.click()}
+            disabled={importing}
+            className="flex items-center gap-2 rounded-xl bg-navy-900 text-white px-4 py-2 text-sm font-semibold disabled:opacity-50"
+          >
+            <UploadCloud size={16} /> ફાઇલ્સ પસંદ કરો
+          </button>
+          {bulkFiles.length > 0 && <span className="text-xs text-navy-500">{bulkFiles.length} ફાઇલ પસંદ</span>}
+          <button
+            onClick={runBulkImport}
+            disabled={importing || matching || !bulkMatches.some((m) => m.chapter_id)}
+            className="flex items-center gap-2 rounded-xl bg-brand-blue text-white px-4 py-2 text-sm font-semibold disabled:opacity-50"
+          >
+            <BookOpen size={16} /> {importing ? 'આયાત ચાલુ…' : 'આયાત કરો'}
+          </button>
+          {matching && <span className="text-xs text-navy-400">પ્રકરણ શોધાય છે…</span>}
+        </div>
+
+        {bulkMatches.length > 0 && (
+          <div className="space-y-1.5">
+            {bulkMatches.map((m, i) => (
+              <div key={i} className="flex flex-wrap items-center gap-2 rounded-xl border border-navy-100 px-3 py-2 text-xs">
+                {m.confident
+                  ? <CheckCircle2 size={14} className="text-green-500 shrink-0" />
+                  : <AlertTriangle size={14} className="text-amber-500 shrink-0" />}
+                <span className="font-mono text-navy-700 max-w-[180px] truncate" title={m.file}>{m.file}</span>
+                <span className="text-navy-300">→</span>
+                <select
+                  value={m.chapter_id || ''}
+                  onChange={(e) => setChapterOverride(i, e.target.value)}
+                  className="flex-1 min-w-[180px] rounded-lg border border-navy-100 px-2 py-1.5 bg-white"
+                >
+                  <option value="">— પ્રકરણ પસંદ કરો —</option>
+                  {candidates.map((s) => (
+                    <optgroup key={s.id} label={s.name_gu}>
+                      {s.chapters.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.number}. {c.name_gu}{c.has_textbook ? ' ✓' : ''}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
+                {m.chapter_id &&
+                  candidates.find((s) => s.id === m.subject_id)?.chapters.find((c) => c.id === m.chapter_id)?.has_textbook && (
+                    <span className="text-amber-600">પહેલેથી છે — સ્કિપ થશે</span>
+                  )}
+                <span className={m.confident ? 'text-green-600' : 'text-amber-600'}>{m.confidence}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {bulkResults.length > 0 && (
+          <div className="space-y-1">
+            {bulkResults.map((r, i) => (
+              <div key={i} className={`rounded-xl px-3 py-2 text-xs ${r.ok ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}`}>
+                {r.ok
+                  ? `✓ ${r.file}: ${r.chunks} છૂંકીઓ${r.retired_docs ? `, ${r.retired_docs} જૂના દસ્તાવેજ બંધ` : ''}`
+                  : `✗ ${r.file}: ${r.error}`}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Upload */}
       <div className="bg-white rounded-2xl shadow-card p-4 space-y-3">

@@ -191,6 +191,7 @@ def process_text(db: Session, document: KnowledgeDocument, cleaned: str) -> int:
                 source=document.title,
                 academic_year=document.academic_year,
                 source_type=document.source_type,
+                doc_type=(getattr(document, "doc_type", None) or "notes"),
                 doc_metadata={"document_title": document.title},
                 embedding=vectors[i] if i < len(vectors) and vectors[i] else None,
             ))

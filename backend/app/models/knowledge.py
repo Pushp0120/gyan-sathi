@@ -21,6 +21,7 @@ class KnowledgeDocument(Base):
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     title = Column(String(300), nullable=False)
     source_type = Column(String(40), default="curated")  # gseb | textbook | question_bank | curated | demo
+    doc_type = Column(String(20), default="notes", index=True)  # textbook | notes
     standard = Column(Integer, index=True, nullable=False)
     subject_id = Column(String(36), ForeignKey("subjects.id", ondelete="SET NULL"), nullable=True)
     chapter_id = Column(String(36), ForeignKey("chapters.id", ondelete="SET NULL"), nullable=True)
@@ -44,6 +45,7 @@ class KnowledgeDocument(Base):
             "id": self.id,
             "title": self.title,
             "source_type": self.source_type,
+            "doc_type": self.doc_type or "notes",
             "standard": self.standard,
             "subject_id": self.subject_id,
             "chapter_id": self.chapter_id,
@@ -79,6 +81,7 @@ class KnowledgeChunk(Base):
     source = Column(String(300), default="")
     academic_year = Column(String(10), default="2026-27")
     source_type = Column(String(40), default="curated")
+    doc_type = Column(String(20), default="notes", index=True)  # textbook | notes
     doc_metadata = Column(JSONType, default=dict)
     is_enabled = Column(Boolean, default=True)
 
@@ -105,6 +108,7 @@ class KnowledgeChunk(Base):
             "source": self.source,
             "academic_year": self.academic_year,
             "source_type": self.source_type,
+            "doc_type": self.doc_type or "notes",
         }
         if include_content:
             d["content"] = self.content

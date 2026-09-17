@@ -61,7 +61,8 @@ def _fallback_keyword_search(db: Session, question: str, limit: int) -> list[dic
     rows = db.execute(
         sql_text(f"""
             SELECT id, document_id, content, standard, subject_name_gu, chapter_name_gu,
-                   chapter_number, page_number, section, source, academic_year, source_type
+                   chapter_number, page_number, section, source, academic_year, source_type,
+                   doc_type
             FROM knowledge_chunks
             WHERE {enabled} AND ({conds})
             LIMIT :lim
@@ -98,7 +99,8 @@ def retrieve_chunks(
 
         where = ["c.is_enabled = true", "d.is_enabled = true", "d.status = 'completed'",
                  "c.embedding IS NOT NULL"]
-        params: dict = {"vec": vec_literal, "k": top_k}
+        # Fetch extra candidates, then prefer textbook chunks when trimming.
+        params: dict = {"vec": vec_literal, "k": top_k * 2}
         if standard:
             where.append("c.standard = :std")
             params["std"] = standard
@@ -117,7 +119,7 @@ def retrieve_chunks(
         sql = sql_text(f"""
             SELECT c.id, c.document_id, c.content, c.standard, c.subject_name_gu,
                    c.chapter_name_gu, c.chapter_number, c.page_number, c.section,
-                   c.source, c.academic_year, c.source_type,
+                   c.source, c.academic_year, c.source_type, c.doc_type,
                    {distance_expr} AS distance
             FROM knowledge_chunks c
             JOIN knowledge_documents d ON d.id = c.document_id
@@ -129,6 +131,9 @@ def retrieve_chunks(
         results = [dict(r._mapping) for r in rows]
         for r in results:
             r["distance"] = float(r["distance"]) if r["distance"] is not None else 1.0
+        # Re-rank: real textbook chunks get a small bonus over AI-generated notes.
+        results.sort(key=lambda r: r["distance"] * (0.9 if r.get("doc_type") == "textbook" else 1.0))
+        results = results[:top_k]
     except Exception as exc:
         # The failed statement aborted the session's transaction — roll back
         # before reusing it, or the keyword fallback below fails too.

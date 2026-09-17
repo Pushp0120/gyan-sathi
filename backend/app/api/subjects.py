@@ -1,5 +1,6 @@
 """Subjects & chapters API (data-driven, no hard-coding in frontend)."""
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import case
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -50,7 +51,12 @@ def chapter_content(chapter_id: str, db: Session = Depends(get_db),
             KnowledgeChunk.chapter_id == chapter_id,
             KnowledgeChunk.is_enabled == True,  # noqa: E712
         )
-        .order_by(KnowledgeChunk.chunk_index)
+        # Real textbook content first, AI-generated notes after — so uploading
+        # a textbook PDF upgrades the reader without deleting anything.
+        .order_by(
+            case((KnowledgeChunk.doc_type == "textbook", 0), else_=1),
+            KnowledgeChunk.chunk_index,
+        )
         .all()
     )
     subject = db.query(Subject).filter(Subject.id == chapter.subject_id).first()

@@ -35,6 +35,12 @@ async def lifespan(app: FastAPI):
                 conn.execute(text(
                     "ALTER TABLE knowledge_documents ADD COLUMN IF NOT EXISTS raw_text TEXT"
                 ))
+                conn.execute(text(
+                    "ALTER TABLE knowledge_documents ADD COLUMN IF NOT EXISTS doc_type VARCHAR(20) DEFAULT 'notes'"
+                ))
+                conn.execute(text(
+                    "ALTER TABLE knowledge_chunks ADD COLUMN IF NOT EXISTS doc_type VARCHAR(20) DEFAULT 'notes'"
+                ))
         logger.info("Database ready (all tables ensured)")
     except Exception:
         created = 0

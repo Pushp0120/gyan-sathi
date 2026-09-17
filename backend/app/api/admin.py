@@ -1,5 +1,6 @@
 """Admin API (role=admin only)."""
 import logging
+import re
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy import func
@@ -218,6 +219,8 @@ async def upload_knowledge(
     subject_id: str | None = None,
     chapter_id: str | None = None,
     source_type: str = "curated",
+    doc_type: str = "notes",
+    replace: bool = False,
     academic_year: str = "2026-27",
     language: str = "gu",
     db: Session = Depends(get_db),
@@ -231,6 +234,7 @@ async def upload_knowledge(
         source_type=source_type, standard=standard, subject_id=subject_id,
         chapter_id=chapter_id, academic_year=academic_year, language=language,
         file_name=file.filename or "", status="pending",
+        doc_type=doc_type if doc_type in ("textbook", "notes") else "notes",
     )
     db.add(doc)
     db.commit()
@@ -240,7 +244,10 @@ async def upload_knowledge(
         chunks = ingestion_service.process_document(db, doc, data, ext)
     except Exception as exc:
         raise HTTPException(422, f"પ્રક્રિયા નિષ્ફળ: {str(exc)[:200]}")
-    return {"ok": True, "document": doc.to_dict(), "chunks": chunks}
+    replaced = 0
+    if replace and doc.is_enabled and doc.status == "completed" and chapter_id:
+        replaced = _retire_other_docs(db, doc)
+    return {"ok": True, "document": doc.to_dict(), "chunks": chunks, "retired_docs": replaced}
 
 
 @router.post("/knowledge/text")
@@ -249,6 +256,7 @@ def ingest_text(body: dict, db: Session = Depends(get_db)):
     text = str(body.get("text") or "").strip()
     if len(text) < 50:
         raise HTTPException(400, "ઓછામાં ઓછું 50 અક્ષરોનું લખાણ આપો.")
+    doc_type = str(body.get("doc_type") or "notes")
     doc = KnowledgeDocument(
         title=str(body.get("title") or "Pasted text")[:300],
         source_type=str(body.get("source_type") or "curated"),
@@ -258,6 +266,7 @@ def ingest_text(body: dict, db: Session = Depends(get_db)):
         academic_year=str(body.get("academic_year") or "2026-27"),
         language=str(body.get("language") or "gu"),
         file_name="", status="pending",
+        doc_type=doc_type if doc_type in ("textbook", "notes") else "notes",
     )
     db.add(doc)
     db.commit()
@@ -337,6 +346,249 @@ def knowledge_search(body: KnowledgeSearchRequest, db: Session = Depends(get_db)
     params["k"] = body.top_k
     rows = db.execute(text_sql(sql), params)
     return {"results": [dict(r._mapping) for r in rows]}
+
+
+# ------------------------------------------------------- bulk import
+
+def _retire_other_docs(db: Session, doc: KnowledgeDocument) -> int:
+    """Disable sibling documents for the same chapter (same subject when unattached).
+
+    Used when a textbook upload replaces AI-generated notes: old docs are
+    disabled rather than deleted, so nothing is lost and they can be re-enabled.
+    """
+    q = db.query(KnowledgeDocument).filter(
+        KnowledgeDocument.id != doc.id,
+        KnowledgeDocument.standard == doc.standard,
+        KnowledgeDocument.is_enabled == True,  # noqa: E712
+    )
+    if doc.chapter_id:
+        q = q.filter(KnowledgeDocument.chapter_id == doc.chapter_id)
+    else:
+        q = q.filter(KnowledgeDocument.chapter_id.is_(None),
+                     KnowledgeDocument.subject_id == doc.subject_id)
+    retired = 0
+    for other in q.all():
+        other.is_enabled = False
+        retired += 1
+    db.commit()
+    return retired
+
+
+def _subject_aliases(s: Subject) -> set[str]:
+    aliases = {(s.name_en or ""), (s.name_gu or ""), (s.code or "")}
+    extra = {
+        "Mathematics": {"maths", "math", "ganit"},
+        "Science": {"sci", "vignan"},
+        "Social Science": {"social", "sst", "samajik"},
+        "English": {"eng"},
+        "Gujarati": {"guj"},
+        "Hindi": {"hin"},
+        "Sanskrit": {"sans"},
+        "ICT": {"computer"},
+    }.get(s.name_en, set())
+    return {a.lower() for a in aliases if a} | {a.lower() for a in extra}
+
+
+def _transliterations(word: str) -> set[str]:
+    """Common Gujarati-name transliteration variants of a romanized word."""
+    w = word.lower().strip()
+    out = {w}
+    for a, b in (("aa", "a"), ("ee", "i"), ("oo", "u"),
+                 ("kh", "k"), ("gh", "g"), ("ch", "c"), ("jh", "j"),
+                 ("th", "t"), ("dh", "d"), ("ph", "p"), ("bh", "b"),
+                 ("sh", "s"), ("v", "b"), ("w", "v")):
+        if a in w:
+            out.add(w.replace(a, b))
+    return out
+
+
+def _match_score(filename: str, subject: Subject, chapter: Chapter, aliases: set[str]) -> float:
+    base = filename.rsplit(".", 1)[0].lower()
+    file_tokens = [p for p in re.split(r"[^a-z0-9\u0A80-\u0AFF]+", base) if p]
+    score = 0.0
+    if any(a in base for a in aliases if len(a) > 2):
+        score += 3
+    m = re.search(r"(?:ch|chapter|prakaran|prakaran)\D{0,3}(\d{1,2})", base) \
+        or re.match(r"(\d{1,2})\b", base)
+    if m and int(m.group(1)) == chapter.number:
+        score += 4
+    name_variants: set[str] = set()
+    for name in (chapter.name_gu or "", chapter.name_en or ""):
+        for tok in re.split(r"[^a-z0-9\u0A80-\u0AFF]+", name.lower()):
+            if len(tok) >= 3:
+                name_variants |= _transliterations(tok)
+    for tok in file_tokens:
+        if len(tok) >= 3 and _transliterations(tok) & name_variants:
+            score += 2
+    return score
+
+
+@router.get("/bulk/candidates")
+def bulk_candidates(standard: int = 10, db: Session = Depends(get_db)):
+    """Chapters a bulk upload can target, with their current document status."""
+    subjects = db.query(Subject).filter(
+        Subject.standard == standard, Subject.is_active == True).all()  # noqa: E712
+    out = []
+    for s in subjects:
+        ch_list = []
+        for c in (db.query(Chapter)
+                  .filter(Chapter.subject_id == s.id, Chapter.is_active == True)  # noqa: E712
+                  .order_by(Chapter.number).all()):
+            docs = db.query(KnowledgeDocument).filter(KnowledgeDocument.chapter_id == c.id).all()
+            enabled = [d for d in docs if d.is_enabled]
+            types = {(getattr(d, "doc_type", None) or "notes") for d in enabled}
+            ch_list.append({
+                "id": c.id, "number": c.number,
+                "name_gu": c.name_gu, "name_en": c.name_en,
+                "has_textbook": "textbook" in types,
+                "has_notes": "notes" in types,
+                "doc_count": len(enabled),
+            })
+        out.append({"id": s.id, "name_gu": s.name_gu, "name_en": s.name_en, "chapters": ch_list})
+    return {"subjects": out}
+
+
+@router.post("/bulk/match")
+def bulk_match(body: dict, db: Session = Depends(get_db)):
+    """Match uploaded filenames to chapters (number in name + subject + fuzzy title)."""
+    files = [str(f) for f in (body.get("files") or []) if str(f).strip()]
+    standard = int(body.get("standard") or 10)
+    subjects = db.query(Subject).filter(
+        Subject.standard == standard, Subject.is_active == True).all()  # noqa: E712
+    matches = []
+    for f in files:
+        best, best_score, best_subject = None, 0.0, None
+        for s in subjects:
+            aliases = _subject_aliases(s)
+            for c in db.query(Chapter).filter(
+                    Chapter.subject_id == s.id, Chapter.is_active == True).all():  # noqa: E712
+                score = _match_score(f, s, c, aliases)
+                if score > best_score:
+                    best, best_score, best_subject = c, score, s
+        matches.append({
+            "file": f,
+            "chapter_id": best.id if best else None,
+            "chapter_number": best.number if best else None,
+            "chapter_name_gu": best.name_gu if best else None,
+            "subject_id": best_subject.id if best_subject else None,
+            "subject_name_gu": best_subject.name_gu if best_subject else None,
+            "confidence": round(best_score, 2),
+            "confident": best_score >= 5,
+        })
+    return {"matches": matches}
+
+
+@router.post("/bulk/ingest")
+async def bulk_ingest(
+    files: list[UploadFile] = File(...),
+    chapter_ids: str = "[]",
+    standard: int = 10,
+    subject_id: str | None = None,
+    doc_type: str = "textbook",
+    replace: bool = True,
+    language: str = "gu",
+    db: Session = Depends(get_db),
+):
+    """Ingest a batch of chapter PDFs (<=10 per call, serverless-friendly).
+
+    Each file must map to a chapter (pre-resolved by /bulk/match or chosen in
+    the UI). Chapters already covered by enabled textbook docs are skipped.
+    """
+    import json as _json
+    try:
+        ids = _json.loads(chapter_ids or "[]")
+    except Exception:
+        ids = []
+    if not files:
+        raise HTTPException(400, "કોઈ ફાઇલ મળી નથી.")
+    if len(files) > 10:
+        raise HTTPException(400, "એક જ વખતે મહત્તમ 10 ફાઇલ અપલોડ કરો.")
+    if doc_type not in ("textbook", "notes"):
+        doc_type = "textbook"
+
+    results = []
+    succeeded = 0
+    for i, f in enumerate(files):
+        cid = ids[i] if i < len(ids) and ids[i] else None
+        entry = {"file": f.filename, "ok": False, "chunks": 0,
+                 "error": None, "document_id": None, "retired_docs": 0}
+        try:
+            ext = (f.filename or "").rsplit(".", 1)[-1].lower()
+            if ext not in ("pdf", "txt", "md", "docx"):
+                raise ValueError("ફાઇલ પ્રકાર માન્ય નથી (PDF/TXT/MD/DOCX).")
+            chapter = db.query(Chapter).filter(Chapter.id == cid).first() if cid else None
+            if not chapter:
+                raise ValueError("પ્રકરણ મળ્યું નથી — ફાઇલ છોડી દેવાઈ.")
+            # Skip chapters that already have an enabled textbook document.
+            existing = db.query(KnowledgeDocument).filter(
+                KnowledgeDocument.chapter_id == cid,
+                KnowledgeDocument.doc_type == "textbook",
+                KnowledgeDocument.is_enabled == True,  # noqa: E712
+            ).count()
+            if existing:
+                raise ValueError("આ પ્રકરણમાં પાઠ્યપુસ્તક પહેલેથી છે — સ્કિપ કરેલ.")
+            data = await f.read()
+            doc = KnowledgeDocument(
+                title=(f.filename or "document")[:300],
+                source_type="textbook" if doc_type == "textbook" else "curated",
+                standard=standard,
+                subject_id=chapter.subject_id or subject_id,
+                chapter_id=cid,
+                academic_year="2026-27", language=language,
+                file_name=f.filename or "", status="pending", doc_type=doc_type,
+            )
+            db.add(doc)
+            db.commit()
+            db.refresh(doc)
+            entry["chunks"] = ingestion_service.process_document(db, doc, data, ext)
+            entry["ok"] = True
+            entry["document_id"] = doc.id
+            succeeded += 1
+            if replace:
+                entry["retired_docs"] = _retire_other_docs(db, doc)
+        except Exception as exc:
+            entry["error"] = str(exc)[:200]
+        results.append(entry)
+    return {"ok": succeeded > 0, "succeeded": succeeded, "total": len(files), "results": results}
+
+
+@router.get("/bulk/coverage")
+def bulk_coverage(standard: int = 10, db: Session = Depends(get_db)):
+    """Textbook coverage: how many active chapters have real textbook chunks."""
+    subjects = db.query(Subject).filter(
+        Subject.standard == standard, Subject.is_active == True).all()  # noqa: E712
+    subj_gu = {s.id: s.name_gu for s in subjects}
+    chapters = (db.query(Chapter)
+                .filter(Chapter.subject_id.in_(subj_gu.keys()),
+                        Chapter.is_active == True)  # noqa: E712
+                .order_by(Chapter.number).all())
+    counts = (
+        db.query(KnowledgeChunk.chapter_id, func.count(KnowledgeChunk.id))
+        .join(KnowledgeDocument, KnowledgeDocument.id == KnowledgeChunk.document_id)
+        .filter(
+            KnowledgeChunk.is_enabled == True,  # noqa: E712
+            KnowledgeDocument.is_enabled == True,  # noqa: E712
+            KnowledgeDocument.doc_type == "textbook",
+            KnowledgeDocument.standard == standard,
+        )
+        .group_by(KnowledgeChunk.chapter_id)
+        .all()
+    )
+    textbook_chunks = {cid: n for cid, n in counts}
+    covered = sum(1 for c in chapters if textbook_chunks.get(c.id))
+    return {
+        "standard": standard,
+        "total_chapters": len(chapters),
+        "textbook_chapters": covered,
+        "chapters": [
+            {
+                "id": c.id, "number": c.number, "name_gu": c.name_gu,
+                "subject_gu": subj_gu.get(c.subject_id, ""),
+                "textbook_chunks": textbook_chunks.get(c.id, 0),
+            }
+            for c in chapters
+        ],
+    }
 
 
 # ------------------------------------------------ subscriptions/payments
