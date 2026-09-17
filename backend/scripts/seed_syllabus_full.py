@@ -65,8 +65,10 @@ CHAPTERS = {
     # Geography chapters of GSEB Std 10 Social Science not yet in the DB.
     # (History/Civics numbering varies by edition — add via admin if needed.)
     (10, "Social Science"): [
+        (1, "ભારતના સંસાધનો"),
         (2, "જંગલ અને વન્યજીવ સંસાધન"), (3, "જળ સંસાધન"), (4, "કૃષિ"),
         (5, "ખનીજ સંસાધન"), (6, "ઊર્જાના સ્ત્રોત"),
+        (7, "પર્યટન વ્યવસાય"), (8, "ઉદ્યોગો"),
         (9, "પરિવહન અને સંદેશાવ્યવહાર"),
     ],
 }
