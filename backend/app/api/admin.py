@@ -2,7 +2,7 @@
 import logging
 import re
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -481,12 +481,12 @@ def bulk_match(body: dict, db: Session = Depends(get_db)):
 @router.post("/bulk/ingest")
 async def bulk_ingest(
     files: list[UploadFile] = File(...),
-    chapter_ids: str = "[]",
-    standard: int = 10,
-    subject_id: str | None = None,
-    doc_type: str = "textbook",
-    replace: bool = True,
-    language: str = "gu",
+    chapter_ids: str = Form("[]"),
+    standard: int = Form(10),
+    subject_id: str | None = Form(None),
+    doc_type: str = Form("textbook"),
+    replace: bool = Form(True),
+    language: str = Form("gu"),
     db: Session = Depends(get_db),
 ):
     """Ingest a batch of chapter PDFs (<=10 per call, serverless-friendly).
