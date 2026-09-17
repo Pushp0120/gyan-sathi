@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.models.chapter import Chapter
-from app.models.knowledge import KnowledgeChunk
+from app.models.knowledge import KnowledgeChunk, KnowledgeDocument
 from app.models.subject import Subject
 from app.models.user import User
 from app.core.security import get_current_user
@@ -47,9 +47,12 @@ def chapter_content(chapter_id: str, db: Session = Depends(get_db),
         raise HTTPException(404, "પ્રકરણ મળ્યું નથી.")
     chunks = (
         db.query(KnowledgeChunk)
+        .join(KnowledgeDocument, KnowledgeDocument.id == KnowledgeChunk.document_id)
         .filter(
             KnowledgeChunk.chapter_id == chapter_id,
             KnowledgeChunk.is_enabled == True,  # noqa: E712
+            # Retired (replaced) documents must not surface in the reader.
+            KnowledgeDocument.is_enabled == True,  # noqa: E712
         )
         # Real textbook content first, AI-generated notes after — so uploading
         # a textbook PDF upgrades the reader without deleting anything.
