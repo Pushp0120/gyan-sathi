@@ -177,6 +177,7 @@ def build_rag_context(chunks: list[dict]) -> tuple[str, list[dict]]:
             "source": c.get("source"),
             "academic_year": c.get("academic_year"),
             "source_type": c.get("source_type"),
+            "doc_type": c.get("doc_type"),
         })
     return "\n\n".join(parts), sources
 
