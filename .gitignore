@@ -49,3 +49,11 @@ reference-chatbot/
 tsconfig.tsbuildinfo
 .vercel
 .env*
+
+# bulk import run artifacts
+textbook_import_state.json
+textbook_import.log
+textbook_import.err
+seed_std10.log
+seed_std10.err
+seed_syllabus.log
