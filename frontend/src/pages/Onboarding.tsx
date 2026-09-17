@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowRight, BookOpenText, Globe, UserRound } from 'lucide-react'
+import { ArrowRight, BookOpenText, Lock, UserRound } from 'lucide-react'
 import Logo from '../components/Logo'
 import { api } from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
@@ -10,14 +10,15 @@ export default function Onboarding() {
   const navigate = useNavigate()
   const { user, updateUser } = useAuth()
   const [fullName, setFullName] = useState(user?.full_name || '')
-  const [standard, setStandard] = useState<number | null>(user?.standard || null)
-  const [medium, setMedium] = useState(user?.medium || 'gujarati')
-  const [language, setLanguage] = useState(user?.preferred_language || 'gu')
+  const [standard] = useState<number>(10) // GSEB Std 10 only
+  const [medium] = useState(user?.medium || 'gujarati') // Gujarati-medium government schools
+  const [password, setPassword] = useState('')
+  const [passwordMsg, setPasswordMsg] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
   const submit = async () => {
-    if (!fullName.trim() || !standard) return
+    if (!fullName.trim()) return
     setBusy(true)
     setError('')
     try {
@@ -27,7 +28,7 @@ export default function Onboarding() {
           full_name: fullName.trim(),
           standard,
           medium,
-          preferred_language: language,
+          preferred_language: 'gu',
         }),
       })
       updateUser(res.user)
@@ -36,6 +37,23 @@ export default function Onboarding() {
       setError(e.message)
     } finally {
       setBusy(false)
+    }
+  }
+
+  const savePassword = async () => {
+    setPasswordMsg('')
+    if (password.length < 6) {
+      setPasswordMsg('પાસવર્ડ ઓછામાં ઓછો 6 અક્ષરનો હોવો જોઈએ.')
+      return
+    }
+    try {
+      await api('/api/auth/set-password', {
+        method: 'POST',
+        body: JSON.stringify({ password }),
+      })
+      setPasswordMsg('✓ પાસવર્ડ સેવ થયો — હવે પાસવર્ડથી લોગ ઇન કરી શકાશે.')
+    } catch (e: any) {
+      setPasswordMsg(e.message)
     }
   }
 
@@ -63,58 +81,44 @@ export default function Onboarding() {
             />
           </div>
 
-          <div>
-            <label className="text-sm font-medium text-navy-700 flex items-center gap-2">
-              <BookOpenText size={16} className="text-brand-orange" /> ધોરણ પસંદ કરો
-            </label>
-            <div className="mt-2 grid grid-cols-2 gap-3">
-              {[9, 10].map((s) => (
-                <button
-                  key={s}
-                  onClick={() => setStandard(s)}
-                  className={`rounded-2xl border-2 py-4 text-center transition ${
-                    standard === s
-                      ? 'border-brand-blue bg-navy-50 shadow-card'
-                      : 'border-navy-100 hover:border-navy-200'
-                  }`}
-                >
-                  <div className="text-2xl font-extrabold text-navy-900">ધોરણ {s}</div>
-                  <div className="text-xs text-navy-400 mt-1">Std. {s}</div>
-                </button>
-              ))}
+          <div className="rounded-xl bg-navy-50 border border-navy-100 px-4 py-3 flex items-center gap-3">
+            <BookOpenText size={20} className="text-brand-blue" />
+            <div>
+              <div className="text-sm font-bold text-navy-900">ધોરણ 10 — GSEB ગુજરાતી માધ્યમ</div>
+              <div className="text-xs text-navy-400">તમામ વિષયો અને પ્રકરણો ગુજરાતીમાં</div>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="text-sm font-medium text-navy-700">માધ્યમ</label>
-              <select
-                value={medium}
-                onChange={(e) => setMedium(e.target.value)}
-                className="mt-1 w-full rounded-xl border border-navy-100 px-3 py-2.5 text-sm outline-none focus:border-brand-blue bg-white"
-              >
-                <option value="gujarati">ગુજરાતી</option>
-                <option value="english">English</option>
-              </select>
-            </div>
-            <div>
-              <label className="text-sm font-medium text-navy-700 flex items-center gap-1">
-                <Globe size={14} className="text-brand-orange" /> ભાષા
+          {!user?.has_password && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-2">
+              <label className="text-sm font-medium text-navy-700 flex items-center gap-2">
+                <Lock size={15} className="text-brand-orange" /> પાસવર્ડ બનાવો (ભલામણ)
               </label>
-              <select
-                value={language}
-                onChange={(e) => setLanguage(e.target.value)}
-                className="mt-1 w-full rounded-xl border border-navy-100 px-3 py-2.5 text-sm outline-none focus:border-brand-blue bg-white"
-              >
-                <option value="gu">ગુજરાતી</option>
-                <option value="en">English</option>
-              </select>
+              <p className="text-[11px] text-navy-500">
+                આગળથી ઈમેલ + પાસવર્ડથી સીધા લોગ ઇન કરી શકાશે — દર વખતે OTP ની જરૂર નહીં.
+              </p>
+              <div className="flex gap-2">
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="ઓછામાં ઓછા 6 અક્ષર"
+                  className="flex-1 rounded-xl border border-amber-200 bg-white px-3 py-2 text-sm outline-none focus:border-brand-blue"
+                />
+                <button
+                  onClick={savePassword}
+                  className="rounded-xl bg-brand-orange text-white px-4 text-xs font-semibold hover:bg-brand-orange-dark"
+                >
+                  સેવ કરો
+                </button>
+              </div>
+              {passwordMsg && <div className="text-[11px] text-navy-600">{passwordMsg}</div>}
             </div>
-          </div>
+          )}
 
           <button
             onClick={submit}
-            disabled={!fullName.trim() || !standard || busy}
+            disabled={!fullName.trim() || busy}
             className="w-full flex items-center justify-center gap-2 rounded-xl bg-brand-blue text-white py-3 text-sm font-semibold hover:bg-navy-800 disabled:opacity-50"
           >
             {busy ? 'સેટ થઈ રહ્યું છે…' : <>શરૂ કરો <ArrowRight size={16} /></>}

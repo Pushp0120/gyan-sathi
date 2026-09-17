@@ -36,6 +36,7 @@ class User(Base):
             "email": self.email,
             "full_name": self.full_name,
             "role": self.role,
+            "has_password": bool(self.password_hash),
             "standard": self.standard,
             "medium": self.medium,
             "preferred_language": self.preferred_language,

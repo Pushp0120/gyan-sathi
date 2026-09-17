@@ -12,6 +12,11 @@ class SendOTPRequest(BaseModel):
 class VerifyOTPRequest(BaseModel):
     email: EmailStr
     otp: str = Field(min_length=4, max_length=10)
+    password: str = Field(default="", max_length=128)  # optional: set login password at signup
+
+
+class SetPasswordRequest(BaseModel):
+    password: str = Field(min_length=6, max_length=128)
 
 
 class PasswordLoginRequest(BaseModel):
@@ -21,7 +26,7 @@ class PasswordLoginRequest(BaseModel):
 
 class OnboardingRequest(BaseModel):
     full_name: str = Field(min_length=1, max_length=120)
-    standard: int = Field(ge=9, le=10)
+    standard: int = Field(default=10, ge=10, le=10)  # GSEB Std 10 only
     medium: str = "gujarati"
     preferred_language: str = "gu"
 

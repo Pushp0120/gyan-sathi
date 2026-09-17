@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.models.chapter import Chapter
+from app.models.knowledge import KnowledgeChunk
 from app.models.subject import Subject
 from app.models.user import User
 from app.core.security import get_current_user
@@ -34,3 +35,27 @@ def list_chapters(subject_id: str, db: Session = Depends(get_db),
         .all()
     )
     return {"subject": subj.to_dict(), "chapters": [c.to_dict() for c in chapters]}
+
+
+@router.get("/chapters/{chapter_id}/content")
+def chapter_content(chapter_id: str, db: Session = Depends(get_db),
+                    user: User = Depends(get_current_user)):
+    """Reading content for a chapter — the ingested knowledge-base text."""
+    chapter = db.query(Chapter).filter(Chapter.id == chapter_id).first()
+    if not chapter:
+        raise HTTPException(404, "પ્રકરણ મળ્યું નથી.")
+    chunks = (
+        db.query(KnowledgeChunk)
+        .filter(
+            KnowledgeChunk.chapter_id == chapter_id,
+            KnowledgeChunk.is_enabled == True,  # noqa: E712
+        )
+        .order_by(KnowledgeChunk.chunk_index)
+        .all()
+    )
+    subject = db.query(Subject).filter(Subject.id == chapter.subject_id).first()
+    return {
+        "chapter": chapter.to_dict(),
+        "subject": subject.to_dict() if subject else None,
+        "sections": [c.content for c in chunks],
+    }

@@ -52,7 +52,6 @@ export default function AdminSubjects() {
               onChange={(e) => setForm({ ...form, standard: +e.target.value })}
               className="mt-1 w-full rounded-lg border border-navy-100 px-2 py-2 text-sm bg-white"
             >
-              <option value={9}>ધોરણ 9</option>
               <option value={10}>ધોરણ 10</option>
             </select>
           </div>

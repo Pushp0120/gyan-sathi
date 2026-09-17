@@ -7,10 +7,13 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.database import get_db
-from app.core.security import create_access_token, get_current_user, verify_password
+from app.core.security import (
+    create_access_token, get_current_user, hash_password, verify_password,
+)
 from app.models.user import User
 from app.schemas import (
-    OnboardingRequest, PasswordLoginRequest, ProfileUpdate, SendOTPRequest, VerifyOTPRequest,
+    OnboardingRequest, PasswordLoginRequest, ProfileUpdate, SendOTPRequest,
+    SetPasswordRequest, VerifyOTPRequest,
 )
 from app.services import usage_service
 from app.services.otp_service import generate_and_store_otp, send_otp_email, verify_otp
@@ -97,6 +100,14 @@ def verify_otp_endpoint(body: VerifyOTPRequest, db: Session = Depends(get_db)):
     if not user.is_active:
         raise HTTPException(403, "તમારું ખાતું બંધ કરેલું છે. સંપર્ક કરો support@gyansathi.in")
 
+    # Optional password creation at signup — afterwards the student can log in
+    # with email+password and OTP stays reserved for account recovery.
+    if body.password:
+        if len(body.password) < 6:
+            raise HTTPException(400, "પાસવર્ડ ઓછામાં ઓછો 6 અક્ષરનો હોવો જોઈએ.")
+        user.password_hash = hash_password(body.password)
+        db.commit()
+
     token = create_access_token(user)
     return {
         "access_token": token,
@@ -107,7 +118,7 @@ def verify_otp_endpoint(body: VerifyOTPRequest, db: Session = Depends(get_db)):
 
 @router.post("/login")
 def password_login(body: PasswordLoginRequest, db: Session = Depends(get_db)):
-    """Email+password login (admin accounts / fallback)."""
+    """Email+password login (students who set a password at signup, and admins)."""
     user = db.query(User).filter(User.email == body.email.lower()).first()
     if not user or not user.password_hash or not verify_password(body.password, user.password_hash):
         raise HTTPException(401, "ઈમેલ અથવા પાસવર્ડ ખોટો છે.")
@@ -116,6 +127,17 @@ def password_login(body: PasswordLoginRequest, db: Session = Depends(get_db)):
     token = create_access_token(user)
     return {"access_token": token, "user": user.to_dict(),
             "needs_onboarding": not user.onboarded}
+
+
+@router.post("/set-password")
+def set_password(body: SetPasswordRequest, user: User = Depends(get_current_user),
+                 db: Session = Depends(get_db)):
+    """Set/replace the login password for the signed-in account."""
+    if len(body.password) < 6:
+        raise HTTPException(400, "પાસવર્ડ ઓછામાં ઓછો 6 અક્ષરનો હોવો જોઈએ.")
+    user.password_hash = hash_password(body.password)
+    db.commit()
+    return {"ok": True}
 
 
 @router.get("/me")

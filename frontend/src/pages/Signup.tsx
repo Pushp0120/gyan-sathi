@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { GraduationCap, Mail, ShieldCheck, Timer } from 'lucide-react'
+import { GraduationCap, Lock, Mail, ShieldCheck, Timer } from 'lucide-react'
 import Logo from '../components/Logo'
 import { api } from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
@@ -14,6 +14,7 @@ export default function Signup() {
   const [step, setStep] = useState<'email' | 'otp'>('email')
   const [email, setEmail] = useState('')
   const [fullName, setFullName] = useState('')
+  const [password, setPassword] = useState('')
   const [otp, setOtp] = useState('')
   const [devMode, setDevMode] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -64,7 +65,7 @@ export default function Signup() {
     try {
       const res = await api<{ access_token: string; user: User; needs_onboarding: boolean }>(
         '/api/auth/verify-otp',
-        { method: 'POST', body: JSON.stringify({ email, otp }) }
+        { method: 'POST', body: JSON.stringify({ email, otp, password }) }
       )
       loginWithToken(res.access_token, res.user)
       navigate('/onboarding')
@@ -91,7 +92,7 @@ export default function Signup() {
             <>
               <div className="flex items-center gap-2 text-sm text-navy-600 bg-navy-50 rounded-xl px-3 py-2">
                 <GraduationCap size={18} className="text-brand-orange" />
-                ધોરણ 9 અને 10 ના વિદ્યાર્થીઓ માટે — સંપૂર્ણ મફત શરૂઆત
+                ધોરણ 10 ના વિદ્યાર્થીઓ માટે — સંપૂર્ણ મફત શરૂઆત
               </div>
               <div>
                 <label className="text-sm font-medium text-navy-700">તમારું નામ</label>
@@ -114,6 +115,23 @@ export default function Signup() {
                     className="w-full bg-transparent px-2 py-2.5 text-sm outline-none"
                   />
                 </div>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-navy-700">પાસવર્ડ બનાવો</label>
+                <div className="mt-1 flex items-center rounded-xl border border-navy-100 px-3 focus-within:border-brand-blue">
+                  <Lock size={18} className="text-navy-300" />
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && email && sendOtp()}
+                    placeholder="ઓછામાં ઓછા 6 અક્ષર"
+                    className="w-full bg-transparent px-2 py-2.5 text-sm outline-none"
+                  />
+                </div>
+                <p className="mt-1 text-[11px] text-navy-400">
+                  આગળથી આ પાસવર્ડથી સીધા લોગ ઇન કરશો — દર વખતે OTP ની જરૂર નહીં.
+                </p>
               </div>
               <button
                 onClick={sendOtp}

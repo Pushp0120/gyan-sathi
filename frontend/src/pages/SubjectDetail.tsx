@@ -32,13 +32,14 @@ export default function SubjectDetail() {
         </div>
       </div>
       <div className="space-y-2">
-        {chapters.map((c) => (
+        {chapters.map((c, i) => (
           <Link
             key={c.id}
-            to={`/chapters/${c.id}`}
-            className="flex items-center gap-3 bg-white rounded-2xl shadow-card px-4 py-3.5 hover:shadow-card-hover transition"
+            to={`/read/${c.id}`}
+            className="chapter-roll chapter-book flex items-center gap-3 rounded-2xl shadow-card px-4 py-3.5 hover:shadow-card-hover hover:-translate-y-0.5 transition"
+            style={{ ['--roll-delay' as string]: `${i * 70}ms` }}
           >
-            <span className="w-8 h-8 rounded-full bg-navy-50 text-navy-700 text-sm font-bold flex items-center justify-center shrink-0">
+            <span className="w-8 h-8 rounded-full bg-navy-900 text-white text-sm font-bold flex items-center justify-center shrink-0">
               {c.number}
             </span>
             <div className="flex-1 min-w-0">

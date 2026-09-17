@@ -15,7 +15,7 @@ export default function Login() {
   const [otpSent, setOtpSent] = useState(false)
   const [otp, setOtp] = useState('')
   const [devMode, setDevMode] = useState(false)
-  const [tab, setTab] = useState<'otp' | 'password'>('otp')
+  const [tab, setTab] = useState<'otp' | 'password'>('password')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [info, setInfo] = useState('')
@@ -185,6 +185,12 @@ export default function Login() {
                   >
                     {busy ? 'લોગ ઇન થાય છે…' : 'લોગ ઇન'}
                   </button>
+                  <div className="text-center text-xs text-navy-400">
+                    પાસવર્ડ યાદ નથી?{' '}
+                    <button onClick={() => setTab('otp')} className="text-brand-blue font-semibold underline">
+                      OTP થી લોગ ઇન કરો
+                    </button>
+                  </div>
                 </div>
               )}
             </>

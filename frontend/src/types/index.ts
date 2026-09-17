@@ -4,6 +4,7 @@ export interface User {
   full_name: string
   role: 'student' | 'admin' | 'teacher'
   standard: number | null
+  has_password?: boolean
   medium: string
   preferred_language: string
   onboarded: boolean
@@ -37,6 +38,7 @@ export interface Chapter {
 export interface RagSource {
   index: number
   standard: number | null
+  has_password?: boolean
   subject_gu: string | null
   chapter_gu: string | null
   chapter_number: number | null
@@ -63,6 +65,7 @@ export interface Conversation {
   id: string
   title: string
   standard: number | null
+  has_password?: boolean
   subject_id: string | null
   chapter_id: string | null
   created_at: string | null

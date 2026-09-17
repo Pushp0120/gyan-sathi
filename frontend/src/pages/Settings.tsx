@@ -1,17 +1,14 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { api } from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
 import type { User } from '../types'
 
 export default function Settings() {
-  const { user, updateUser, logout } = useAuth()
-  const navigate = useNavigate()
+  const { user, updateUser } = useAuth()
   const [fullName, setFullName] = useState(user?.full_name || '')
-  const [standard, setStandard] = useState(user?.standard || 10)
-  const [medium, setMedium] = useState(user?.medium || 'gujarati')
-  const [language, setLanguage] = useState(user?.preferred_language || 'gu')
+  const [password, setPassword] = useState('')
   const [saved, setSaved] = useState(false)
+  const [pwMsg, setPwMsg] = useState('')
   const [busy, setBusy] = useState(false)
 
   const save = async () => {
@@ -21,9 +18,9 @@ export default function Settings() {
         method: 'POST',
         body: JSON.stringify({
           full_name: fullName,
-          standard,
-          medium,
-          preferred_language: language,
+          standard: 10,
+          medium: 'gujarati',
+          preferred_language: 'gu',
         }),
       })
       updateUser(res.user)
@@ -31,6 +28,25 @@ export default function Settings() {
       setTimeout(() => setSaved(false), 2000)
     } finally {
       setBusy(false)
+    }
+  }
+
+  const savePassword = async () => {
+    setPwMsg('')
+    if (password.length < 6) {
+      setPwMsg('પાસવર્ડ ઓછામાં ઓછો 6 અક્ષરનો હોવો જોઈએ.')
+      return
+    }
+    try {
+      await api('/api/auth/set-password', {
+        method: 'POST',
+        body: JSON.stringify({ password }),
+      })
+      setPassword('')
+      setPwMsg('✓ પાસવર્ડ સેવ થયો')
+      updateUser({ has_password: true })
+    } catch (e: any) {
+      setPwMsg(e.message)
     }
   }
 
@@ -46,45 +62,9 @@ export default function Settings() {
             className="mt-1 w-full rounded-xl border border-navy-100 px-3 py-2.5 text-sm outline-none focus:border-brand-blue"
           />
         </div>
-        <div>
-          <label className="text-sm font-medium text-navy-700">ધોરણ</label>
-          <div className="mt-1 grid grid-cols-2 gap-2">
-            {[9, 10].map((s) => (
-              <button
-                key={s}
-                onClick={() => setStandard(s)}
-                className={`rounded-xl border-2 py-2.5 text-sm font-bold transition ${
-                  standard === s ? 'border-brand-blue bg-navy-50' : 'border-navy-100 text-navy-400'
-                }`}
-              >
-                ધોરણ {s}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="text-sm font-medium text-navy-700">માધ્યમ</label>
-            <select
-              value={medium}
-              onChange={(e) => setMedium(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-navy-100 px-3 py-2.5 text-sm bg-white outline-none focus:border-brand-blue"
-            >
-              <option value="gujarati">ગુજરાતી</option>
-              <option value="english">English</option>
-            </select>
-          </div>
-          <div>
-            <label className="text-sm font-medium text-navy-700">ભાષા</label>
-            <select
-              value={language}
-              onChange={(e) => setLanguage(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-navy-100 px-3 py-2.5 text-sm bg-white outline-none focus:border-brand-blue"
-            >
-              <option value="gu">ગુજરાતી</option>
-              <option value="en">English</option>
-            </select>
-          </div>
+        <div className="rounded-xl bg-navy-50 border border-navy-100 px-4 py-3 text-sm">
+          <span className="font-bold text-navy-900">ધોરણ 10</span>
+          <span className="text-navy-400"> · GSEB ગુજરાતી માધ્યમ</span>
         </div>
         <button
           onClick={save}
@@ -93,6 +73,33 @@ export default function Settings() {
         >
           {busy ? 'સેવ થઈ રહ્યું છે…' : saved ? '✓ સેવ થયું' : 'સેવ કરો'}
         </button>
+      </div>
+
+      <div className="bg-white rounded-2xl shadow-card p-5 space-y-3 mt-4">
+        <label className="text-sm font-medium text-navy-700">
+          {user?.has_password ? 'પાસવર્ડ બદલો' : 'પાસવર્ડ બનાવો'}
+        </label>
+        {!user?.has_password && (
+          <p className="text-[11px] text-navy-400">
+            પાસવર્ડ સેવ કરો એટલે આગળથી OTP વગર સીધા લોગ ઇન કરી શકાશે.
+          </p>
+        )}
+        <div className="flex gap-2">
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="ઓછામાં ઓછા 6 અક્ષર"
+            className="flex-1 rounded-xl border border-navy-100 px-3 py-2.5 text-sm outline-none focus:border-brand-blue"
+          />
+          <button
+            onClick={savePassword}
+            className="rounded-xl bg-navy-900 text-white px-4 text-sm font-semibold hover:bg-navy-800"
+          >
+            સેવ કરો
+          </button>
+        </div>
+        {pwMsg && <div className="text-xs text-navy-600">{pwMsg}</div>}
       </div>
     </div>
   )
