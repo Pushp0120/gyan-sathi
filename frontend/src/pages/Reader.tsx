@@ -18,6 +18,7 @@ function renderInline(text: string): string {
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
+    .replace(/\*(.+?)\*/g, '<i>$1</i>')
     .replace(/^### (.*)$/gm, '<h3>$1</h3>')
     .replace(/^## (.*)$/gm, '<h2>$1</h2>')
 }
@@ -57,7 +58,7 @@ export default function Reader() {
     if (!chapterId) return
     setLoading(true)
     api<{ chapter: Chapter; subject: Subject | null; sections: string[] }>(
-      `/api/subjects/chapters/${chapterId}/content`
+      `/api/chapters/${chapterId}/content`
     )
       .then((r) => {
         setChapter(r.chapter)
