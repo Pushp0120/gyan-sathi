@@ -30,17 +30,19 @@ async def lifespan(app: FastAPI):
                 conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
         Base.metadata.create_all(bind=engine)
         # Lightweight migrations for columns added after first release.
-        if settings.database_url.startswith("postgresql"):
-            with engine.begin() as conn:
-                conn.execute(text(
-                    "ALTER TABLE knowledge_documents ADD COLUMN IF NOT EXISTS raw_text TEXT"
-                ))
-                conn.execute(text(
-                    "ALTER TABLE knowledge_documents ADD COLUMN IF NOT EXISTS doc_type VARCHAR(20) DEFAULT 'notes'"
-                ))
-                conn.execute(text(
-                    "ALTER TABLE knowledge_chunks ADD COLUMN IF NOT EXISTS doc_type VARCHAR(20) DEFAULT 'notes'"
-                ))
+        # Run on every dialect (SQLite dev DBs included); each statement gets
+        # its own transaction so one failure never blocks the rest.
+        for stmt in (
+            "ALTER TABLE knowledge_documents ADD COLUMN IF NOT EXISTS raw_text TEXT",
+            "ALTER TABLE knowledge_documents ADD COLUMN IF NOT EXISTS doc_type VARCHAR(20) DEFAULT 'notes'",
+            "ALTER TABLE knowledge_chunks ADD COLUMN IF NOT EXISTS doc_type VARCHAR(20) DEFAULT 'notes'",
+        ):
+            try:
+                with engine.begin() as conn:
+                    conn.execute(text(stmt))
+            except Exception:
+                # SQLite lacks IF NOT EXISTS and raises on duplicate columns.
+                pass
         logger.info("Database ready (all tables ensured)")
     except Exception:
         created = 0
