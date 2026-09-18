@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { ChevronRight } from 'lucide-react'
+import { ChevronRight, BookOpen } from 'lucide-react'
 import { api } from '../services/api'
 import type { Chapter, Subject } from '../types'
 
@@ -31,6 +31,17 @@ export default function SubjectDetail() {
           </p>
         </div>
       </div>
+      <Link
+        to={`/textbook/${subjectId}`}
+        className="mb-5 flex items-center gap-3 rounded-2xl bg-gradient-to-r from-brand-orange to-brand-blue text-white shadow-card px-4 py-3.5 hover:opacity-95 transition"
+      >
+        <BookOpen size={22} />
+        <div className="flex-1">
+          <div className="text-sm font-bold">સંપૂર્ણ પાઠ્યપુસ્તક વાંચો</div>
+          <div className="text-[11px] text-white/80">અધિકૃત GSEB પુસ્તક · PDF</div>
+        </div>
+        <ChevronRight size={17} />
+      </Link>
       <div className="space-y-2">
         {chapters.map((c, i) => (
           <Link

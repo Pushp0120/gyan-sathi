@@ -12,6 +12,19 @@ from app.core.security import get_current_user
 
 router = APIRouter(prefix="/api", tags=["subjects"])
 
+# Official GCERT/GSEB Std 10 textbooks (Gujarati medium), stored on Vercel Blob.
+# Keyed by lowercase subject name; ICT is served the Computer Studies book.
+TEXTBOOK_PDFS: dict[str, str] = {
+    "mathematics": "https://vovzjthjoeh5pzui.public.blob.vercel-storage.com/std10-mathematics.pdf",
+    "science": "https://vovzjthjoeh5pzui.public.blob.vercel-storage.com/std10-science.pdf",
+    "social science": "https://vovzjthjoeh5pzui.public.blob.vercel-storage.com/std10-social-science.pdf",
+    "gujarati": "https://vovzjthjoeh5pzui.public.blob.vercel-storage.com/std10-gujarati.pdf",
+    "english": "https://vovzjthjoeh5pzui.public.blob.vercel-storage.com/std10-english.pdf",
+    "hindi": "https://vovzjthjoeh5pzui.public.blob.vercel-storage.com/std10-hindi.pdf",
+    "sanskrit": "https://vovzjthjoeh5pzui.public.blob.vercel-storage.com/std10-sanskrit.pdf",
+    "ict": "https://vovzjthjoeh5pzui.public.blob.vercel-storage.com/std10-computer-studies.pdf",
+}
+
 
 @router.get("/subjects")
 def list_subjects(standard: int | None = None, db: Session = Depends(get_db),
@@ -68,3 +81,14 @@ def chapter_content(chapter_id: str, db: Session = Depends(get_db),
         "subject": subject.to_dict() if subject else None,
         "sections": [c.content for c in chunks],
     }
+
+
+@router.get("/subjects/{subject_id}/textbook")
+def subject_textbook(subject_id: str, db: Session = Depends(get_db),
+                     user: User = Depends(get_current_user)):
+    """Full official textbook PDF for a subject (served from Vercel Blob CDN)."""
+    subj = db.query(Subject).filter(Subject.id == subject_id, Subject.is_active == True).first()  # noqa: E712
+    if not subj:
+        raise HTTPException(404, "વિષય મળ્યો નથી.")
+    pdf_url = TEXTBOOK_PDFS.get((subj.name_en or "").strip().lower())
+    return {"subject": subj.to_dict(), "pdf_url": pdf_url}

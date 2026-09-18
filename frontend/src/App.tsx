@@ -14,6 +14,7 @@ const Subjects = lazy(() => import('./pages/Subjects'))
 const SubjectDetail = lazy(() => import('./pages/SubjectDetail'))
 const ChapterDetail = lazy(() => import('./pages/ChapterDetail'))
 const Reader = lazy(() => import('./pages/Reader'))
+const PdfReader = lazy(() => import('./pages/PdfReader'))
 const Quiz = lazy(() => import('./pages/Quiz'))
 const Progress = lazy(() => import('./pages/Progress'))
 const Uploads = lazy(() => import('./pages/Uploads'))
@@ -59,6 +60,7 @@ export default function App() {
             <Route path="/subjects/:subjectId" element={<SubjectDetail />} />
             <Route path="/chapters/:chapterId" element={<ChapterDetail />} />
             <Route path="/read/:chapterId" element={<Reader />} />
+            <Route path="/textbook/:subjectId" element={<PdfReader />} />
             <Route path="/quiz" element={<Quiz />} />
             <Route path="/progress" element={<Progress />} />
             <Route path="/uploads" element={<Uploads />} />
