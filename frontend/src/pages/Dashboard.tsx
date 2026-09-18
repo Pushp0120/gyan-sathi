@@ -108,7 +108,7 @@ export default function Dashboard() {
           {subjects.map((s) => (
             <Link
               key={s.id}
-              to={`/subjects/${s.id}`}
+              to={`/textbook/${s.id}`}
               className="bg-white rounded-2xl shadow-card p-4 text-center hover:shadow-card-hover hover:-translate-y-0.5 transition"
             >
               <div className="text-3xl">{s.icon}</div>
