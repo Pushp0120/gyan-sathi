@@ -74,7 +74,8 @@ def _score_and_store(body: QuizSubmitRequest, user: User, db: Session):
             right = bool(a.get("is_right"))
         if right:
             correct += 1
-        details.append({"question_id": qid, "selected": selected,
+        details.append({"question_id": qid, "question_index": a.get("question_index"),
+                        "selected": selected,
                         "correct": q.correct_answer if q else a.get("correct"),
                         "is_right": right})
 
