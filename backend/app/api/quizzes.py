@@ -45,11 +45,16 @@ def quiz_generate(body: QuizGenerateRequest, user: User = Depends(get_current_us
             "chapter": chapter.to_dict() if chapter else None}
 
 
-@router.post("/quiz/{attempt_id}/submit")
-def quiz_submit(attempt_id: str, body: QuizSubmitRequest,
+@router.post("/quiz/submit")
+def quiz_submit(body: QuizSubmitRequest,
                 user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Stateless submit — the frontend has no attempt id before scoring."""
+    return _score_and_store(body, user, db)
+
+
+def _score_and_store(body: QuizSubmitRequest, user: User, db: Session):
     # Quiz is stateless on server: answers carry the questions from generation time.
-    # We re-score using stored question bank entries matched by text.
+    # We re-score using stored question bank entries matched by id/text.
     from app.models.quiz import QuizQuestion
 
     answers = body.answers
