@@ -47,12 +47,8 @@ export default function Signup() {
   return (
     <div className="min-h-full flex flex-col items-center justify-center px-4 py-10 bg-gradient-to-b from-navy-50 to-white">
       <div className="w-full max-w-md">
-        <div className="flex flex-col items-center mb-8">
-          <Logo size={96} withText={false} />
-          <h1 className="mt-3 text-2xl font-extrabold text-navy-900">
-            સાઇન અપ — Gyan <span className="text-brand-orange">Sathi</span>
-          </h1>
-          <p className="text-sm text-navy-500 mt-1">ગુજરાતી વિદ્યાર્થીઓનો AI અભ્યાસ સાથી</p>
+        <div className="flex flex-col items-center mb-6">
+          <Logo size={110} withText={false} />
         </div>
 
         <div className="bg-white rounded-2xl shadow-card p-6 space-y-4">
