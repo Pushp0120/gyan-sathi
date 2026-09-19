@@ -24,6 +24,16 @@ class PasswordLoginRequest(BaseModel):
     password: str
 
 
+class GoogleAuthRequest(BaseModel):
+    credential: str  # Google ID token (JWT) from GIS button / One Tap
+
+
+class DirectSignupRequest(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=6, max_length=128)
+    full_name: str = Field(default="", max_length=120)
+
+
 class OnboardingRequest(BaseModel):
     full_name: str = Field(min_length=1, max_length=120)
     standard: int = Field(default=10, ge=10, le=10)  # GSEB Std 10 only

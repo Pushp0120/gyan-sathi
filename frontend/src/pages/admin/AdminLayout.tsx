@@ -1,9 +1,10 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import {
   BarChart3, BookOpen, ChevronLeft, CreditCard, Database, GraduationCap,
-  LayoutDashboard, ListTree,
+  LayoutDashboard, ListTree, LogOut,
 } from 'lucide-react'
 import Logo from '../../components/Logo'
+import { useAuth } from '../../contexts/AuthContext'
 
 const nav = [
   { to: '/admin', label: 'ડેશબોર્ડ', icon: LayoutDashboard, end: true },
@@ -17,6 +18,7 @@ const nav = [
 
 export default function AdminLayout() {
   const navigate = useNavigate()
+  const { logout } = useAuth()
   return (
     <div className="flex h-full">
       <aside className="hidden md:flex w-60 flex-col bg-navy-950 text-white px-4 py-5">
@@ -44,12 +46,20 @@ export default function AdminLayout() {
             </NavLink>
           ))}
         </nav>
-        <button
-          onClick={() => navigate('/dashboard')}
-          className="flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm text-white/60 hover:bg-white/10"
-        >
-          <ChevronLeft size={16} /> સ્ટુડન્ટ વ્યૂ
-        </button>
+        <div className="space-y-1 pt-2 border-t border-white/10">
+          <button
+            onClick={() => navigate('/dashboard')}
+            className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-sm text-white/60 hover:bg-white/10"
+          >
+            <ChevronLeft size={16} /> સ્ટુડન્ટ વ્યૂ
+          </button>
+          <button
+            onClick={logout}
+            className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-sm text-white/60 hover:bg-white/10 hover:text-white"
+          >
+            <LogOut size={16} /> લોગ આઉટ
+          </button>
+        </div>
       </aside>
 
       <div className="flex-1 flex flex-col min-w-0">
@@ -69,6 +79,13 @@ export default function AdminLayout() {
               {label}
             </NavLink>
           ))}
+          <button
+            onClick={logout}
+            aria-label="Logout"
+            className="ml-auto shrink-0 rounded-full p-2 text-white/70 hover:bg-white/10 hover:text-white"
+          >
+            <LogOut size={16} />
+          </button>
         </header>
         <main className="flex-1 overflow-y-auto bg-slate-50">
           <Outlet />

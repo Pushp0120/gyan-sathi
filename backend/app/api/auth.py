@@ -12,8 +12,8 @@ from app.core.security import (
 )
 from app.models.user import User
 from app.schemas import (
-    OnboardingRequest, PasswordLoginRequest, ProfileUpdate, SendOTPRequest,
-    SetPasswordRequest, VerifyOTPRequest,
+    DirectSignupRequest, GoogleAuthRequest, OnboardingRequest, PasswordLoginRequest,
+    ProfileUpdate, SendOTPRequest, SetPasswordRequest, VerifyOTPRequest,
 )
 from app.services import usage_service
 from app.services.otp_service import generate_and_store_otp, send_otp_email, verify_otp
@@ -116,6 +116,42 @@ def verify_otp_endpoint(body: VerifyOTPRequest, db: Session = Depends(get_db)):
     }
 
 
+@router.post("/signup")
+def direct_signup(body: DirectSignupRequest, db: Session = Depends(get_db)):
+    """Direct email+password signup — no OTP. OTP stays reserved for
+    forgot-password recovery only (per product decision)."""
+    email = body.email.lower()
+    user = db.query(User).filter(User.email == email).first()
+    if user:
+        if user.password_hash:
+            raise HTTPException(409, "આ ઈમેલ પહેલેથી નોંધાયેલું છે. લોગ ઇન કરો અથવા પાસવર્ડ ભૂલાવો વાપરો.")
+        # Pre-existing OTP-only account: claim it by setting a password.
+        user.password_hash = hash_password(body.password)
+        if body.full_name:
+            user.full_name = body.full_name.strip()
+        db.commit()
+    else:
+        user = User(
+            email=email,
+            full_name=body.full_name.strip(),
+            role="admin" if email in settings.admin_email_list else "student",
+            onboarded=False,
+        )
+        user.password_hash = hash_password(body.password)
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+    if not user.is_active:
+        raise HTTPException(403, "તમારું ખાતું બંધ કરેલું છે. સંપર્ક કરો support@gyansathi.in")
+
+    token = create_access_token(user)
+    return {
+        "access_token": token,
+        "user": user.to_dict(),
+        "needs_onboarding": not user.onboarded,
+    }
+
+
 @router.post("/login")
 def password_login(body: PasswordLoginRequest, db: Session = Depends(get_db)):
     """Email+password login (students who set a password at signup, and admins)."""
@@ -164,3 +200,95 @@ def complete_onboarding(body: OnboardingRequest, user: User = Depends(get_curren
 def logout(user: User = Depends(get_current_user)):
     # JWT is stateless; client discards the token. Endpoint kept for API symmetry.
     return {"ok": True}
+
+
+# --------------------------------------------------------------- Google
+
+def _verify_google_id_token(credential: str) -> dict:
+    """Verify a Google ID token (RS256 signature via Google JWKS, iss/aud/exp).
+
+    No Google client library needed — pyjwt + Google's public keys. Admin
+    emails (settings.admin_email_list) are promoted on first Google login.
+    """
+    import time
+
+    import requests
+
+    import jwt as pyjwt
+
+    try:
+        header = pyjwt.get_unverified_header(credential)
+    except Exception:
+        raise HTTPException(401, "માન્ય ન હોય તેવો Google ટોકન.")
+
+    try:
+        resp = requests.get("https://www.googleapis.com/oauth2/v3/certs", timeout=10)
+        resp.raise_for_status()
+        keys = resp.json().get("keys", [])
+    except requests.RequestException:
+        raise HTTPException(503, "Google સાથે કનેક્ટ થઈ શકાયો નથી. ફરી પ્રયાસ કરો.")
+
+    claims = None
+    try:
+        for key in keys:
+            if key.get("kid") != header.get("kid"):
+                continue
+            claims = pyjwt.decode(
+                credential,
+                pyjwt.algorithms.RSAAlgorithm.from_jwk(key),
+                algorithms=["RS256"],
+                audience=settings.google_client_id,
+                issuer={"https://accounts.google.com", "accounts.google.com"},
+                options={"require": ["exp", "iss", "aud"]},
+            )
+            break
+    except pyjwt.PyJWTError as exc:
+        logger.info("Google ID token verification failed: %s", exc)
+
+    if claims is None:
+        raise HTTPException(401, "Google સાઇન ઇન ચકાસી શકાયો નથી. ફરી પ્રયાસ કરો.")
+    if claims.get("email_verified") is False:
+        raise HTTPException(401, "Google ઈમેલ ચકાસેલો નથી.")
+    return claims
+
+
+@router.post("/google")
+def google_auth(body: GoogleAuthRequest, db: Session = Depends(get_db)):
+    """Exchange a Google ID token for an app JWT (find or create user)."""
+    if not settings.google_client_id:
+        raise HTTPException(503, "Google સાઇન ઇન સેટ થયેલું નથી.")
+
+    claims = _verify_google_id_token(body.credential)
+    email = (claims.get("email") or "").lower()
+    if not email:
+        raise HTTPException(401, "Google ખાતામાં ઈમેલ નથી.")
+
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        user = User(
+            email=email,
+            full_name=claims.get("name") or "",
+            role="admin" if email in settings.admin_email_list else "student",
+            onboarded=False,
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+    if not user.is_active:
+        raise HTTPException(403, "તમારું ખાતું બંધ કરેલું છે. સંપર્ક કરો support@gyansathi.in")
+    if user.role != "admin" and email in settings.admin_email_list:
+        user.role = "admin"
+        db.commit()
+
+    token = create_access_token(user)
+    return {
+        "access_token": token,
+        "user": user.to_dict(),
+        "needs_onboarding": not user.onboarded,
+    }
+
+
+@router.get("/google/status")
+def google_status():
+    """Whether Google Sign-In is configured (client id for the GIS button)."""
+    return {"enabled": bool(settings.google_client_id), "client_id": settings.google_client_id}
