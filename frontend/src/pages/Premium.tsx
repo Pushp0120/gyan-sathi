@@ -1,8 +1,17 @@
-import { useEffect, useState } from 'react'
-import { Check, Crown, ShieldCheck, Sparkles } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Check, Crown, Copy, QrCode, ShieldCheck, Sparkles, Timer } from 'lucide-react'
 import { api } from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
 import type { Plan, SubscriptionStatus } from '../types'
+
+interface UpiOrder {
+  payment_id: string
+  order_id: string
+  amount: number
+  payee_name: string
+  window_seconds: number
+  expires_at: string
+}
 
 export default function Premium() {
   const { refreshUser } = useAuth()
@@ -11,6 +20,15 @@ export default function Premium() {
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+
+  // --- UPI QR payment modal state ---
+  const [order, setOrder] = useState<UpiOrder | null>(null)
+  const [secondsLeft, setSecondsLeft] = useState(0)
+  const [utr, setUtr] = useState('')
+  const [verifying, setVerifying] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const tickRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const load = async () => {
     try {
@@ -25,79 +43,89 @@ export default function Premium() {
 
   useEffect(() => {
     load()
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current)
+      if (tickRef.current) clearInterval(tickRef.current)
+    }
   }, [])
 
   const premium = plans.find((p) => p.code === 'premium')
   const isPremium = status?.is_premium
 
-  const purchase = async () => {
+  const closeModal = () => {
+    setOrder(null)
+    setUtr('')
+    if (pollRef.current) clearInterval(pollRef.current)
+    if (tickRef.current) clearInterval(tickRef.current)
+  }
+
+  const startOrder = async () => {
     setBusy(true)
     setError('')
     setMessage('')
     try {
-      // 1. Create order (backend decides sandbox vs live Razorpay)
-      const order = await api<{
-        payment_id: string
-        order_id: string
-        amount: number
-        mode: string
-        gateway: string
-        key_id?: string
-      }>('/api/subscription/create', {
+      const o = await api<UpiOrder>('/api/subscription/create', {
         method: 'POST',
         body: JSON.stringify({ plan_code: 'premium' }),
       })
+      setOrder(o)
+      setSecondsLeft(o.window_seconds)
 
-      if (order.mode === 'live' && (window as any).Razorpay) {
-        // Live flow: open Razorpay checkout, then verify server-side
-        const rzp = new (window as any).Razorpay({
-          key: order.key_id || order.order_id,
-          amount: order.amount * 100,
-          currency: 'INR',
-          name: 'Gyan Sathi Premium',
-          description: 'વાર્ષિક પ્રીમિયમ સબસ્ક્રિપ્શન',
-          order_id: order.order_id,
-          handler: async (resp: any) => {
-            const verify = await api<{ ok: boolean }>('/api/subscription/verify', {
-              method: 'POST',
-              body: JSON.stringify({
-                payment_id: order.payment_id,
-                gateway_order_id: resp.razorpay_order_id,
-                gateway_payment_id: resp.razorpay_payment_id,
-                gateway_signature: resp.razorpay_signature,
-              }),
-            })
-            if (verify.ok) {
-              setMessage('અભિનંદન! Premium સક્રિય થયું 🎉')
-              await load()
-              await refreshUser()
-            }
-          },
+      // 1-second countdown for the payment window
+      if (tickRef.current) clearInterval(tickRef.current)
+      tickRef.current = setInterval(() => {
+        setSecondsLeft((s) => {
+          if (s <= 1) {
+            clearInterval(tickRef.current!)
+            clearInterval(pollRef.current!)
+            return 0
+          }
+          return s - 1
         })
-        rzp.open()
-      } else {
-        // Sandbox flow: simulate a payment token, then server-side verify
-        const verify = await api<{ ok: boolean }>('/api/subscription/verify', {
-          method: 'POST',
-          body: JSON.stringify({
-            payment_id: order.payment_id,
-            gateway_order_id: order.order_id,
-            gateway_payment_id: `sandbox_pay_${Date.now()}`,
-            gateway_signature: 'sandbox',
-          }),
-        })
-        if (verify.ok) {
-          setMessage('અભિનંદન! Premium સક્રિય થયું 🎉 (ટેસ્ટ મોડ)')
-          await load()
-          await refreshUser()
-        }
-      }
+      }, 1000)
     } catch (e: any) {
       setError(e.message)
     } finally {
       setBusy(false)
     }
   }
+
+  const verifyUtr = async () => {
+    if (!order || utr.trim().length !== 12) {
+      setError('12 અંકનો UTR લખો.')
+      return
+    }
+    setVerifying(true)
+    setError('')
+    try {
+      const res = await api<{ ok: boolean }>('/api/subscription/upi/verify', {
+        method: 'POST',
+        body: JSON.stringify({ payment_id: order.payment_id, utr: utr.trim() }),
+      })
+      if (res.ok) {
+        if (pollRef.current) clearInterval(pollRef.current)
+        if (tickRef.current) clearInterval(tickRef.current)
+        setMessage('અભિનંદન! Premium સક્રિય થયું 🎉')
+        closeModal()
+        await load()
+        await refreshUser()
+      }
+    } catch (e: any) {
+      setError(e.message)
+    } finally {
+      setVerifying(false)
+    }
+  }
+
+  const copyAmount = async () => {
+    try {
+      await navigator.clipboard.writeText(String(order?.amount ?? ''))
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    } catch {}
+  }
+
+  const mmss = `${Math.floor(secondsLeft / 60)}:${String(secondsLeft % 60).padStart(2, '0')}`
 
   return (
     <div className="max-w-md mx-auto px-4 py-8">
@@ -137,26 +165,126 @@ export default function Premium() {
             </div>
           ))}
           <button
-            onClick={purchase}
+            onClick={startOrder}
             disabled={busy}
             className="w-full mt-2 rounded-xl bg-brand-orange text-white py-3 text-sm font-extrabold hover:bg-brand-orange-dark disabled:opacity-50"
           >
-            {busy ? 'પ્રક્રિયા ચાલુ છે…' : 'Get Premium 👑'}
+            {busy ? 'શરૂ થાય છે…' : 'Get Premium 👑'}
           </button>
-          {status?.payment_mode === 'sandbox' && (
-            <div className="text-center text-[11px] text-amber-600 flex items-center justify-center gap-1">
-              <Sparkles size={11} /> ટેસ્ટ મોડ — વાસ્તવિક પેમેન્ટ થશે નહીં
-            </div>
-          )}
+          <div className="text-center text-[11px] text-navy-400 flex items-center justify-center gap-1">
+            <QrCode size={11} /> UPI થી ચૂકવો — QR સ્કેન કરો
+          </div>
         </div>
       )}
 
       {message && <div className="mt-3 rounded-xl bg-green-50 text-green-700 text-sm px-3 py-2.5 text-center">{message}</div>}
-      {error && <div className="mt-3 rounded-xl bg-red-50 text-red-600 text-xs px-3 py-2">{error}</div>}
+      {error && !order && <div className="mt-3 rounded-xl bg-red-50 text-red-600 text-xs px-3 py-2">{error}</div>}
 
       <p className="mt-4 text-center text-[11px] text-navy-300">
-        ચુકવણી સુરક્ષિત છે. સબસ્ક્રિપ્શન ફક્ત સર્વર-સાઇડ ચકાસણી પછી જ સક્રિય થાય છે.
+        ચુકવણી પછી UPI રેફરન્સ (UTR) નંબર નાખો — ચકાસણી પછી Premium તરત સક્રિય થશે.
       </p>
+
+      {/* ---------------- UPI QR payment modal ---------------- */}
+      {order && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy-950/70 backdrop-blur-sm px-4">
+          <div className="w-full max-w-sm bg-white rounded-3xl shadow-2xl p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 font-bold text-navy-900">
+                <Crown size={18} className="text-brand-orange" /> UPI ચુકવણી
+              </div>
+              <div
+                className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold ${
+                  secondsLeft > 30 ? 'bg-navy-50 text-navy-700' : 'bg-red-50 text-red-600 animate-pulse'
+                }`}
+              >
+                <Timer size={13} /> {mmss}
+              </div>
+            </div>
+
+            {secondsLeft > 0 ? (
+              <>
+                <div className="rounded-2xl border border-navy-100 p-3 text-center">
+                  <img
+                    src="/assets/upi-qr.jpeg"
+                    alt="UPI QR"
+                    className="mx-auto w-52 h-52 object-contain rounded-xl"
+                  />
+                  <div className="mt-2 text-xs text-navy-500">
+                    કોઈપણ UPI એપ (GPay / PhonePe / Paytm) થી સ્કેન કરો
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between rounded-xl bg-navy-50 px-3 py-2.5">
+                  <div>
+                    <div className="text-[10px] text-navy-400 font-semibold uppercase tracking-wide">રકમ</div>
+                    <div className="text-lg font-extrabold text-navy-900">₹{order.amount}</div>
+                  </div>
+                  <button
+                    onClick={copyAmount}
+                    className="flex items-center gap-1 rounded-lg bg-white border border-navy-100 px-2.5 py-1.5 text-xs font-semibold text-navy-700 hover:bg-navy-50"
+                  >
+                    <Copy size={13} /> {copied ? 'કૉપિ થયું ✓' : 'કૉપિ'}
+                  </button>
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium text-navy-700">
+                    UPI રેફરન્સ નંબર (UTR) <span className="text-navy-400 text-xs">— 12 અંક</span>
+                  </label>
+                  <input
+                    value={utr}
+                    onChange={(e) => setUtr(e.target.value.replace(/\D/g, '').slice(0, 12))}
+                    inputMode="numeric"
+                    placeholder="જેમ કે 4231 8890 1234"
+                    className="mt-1 w-full rounded-xl border border-navy-100 px-3 py-2.5 text-sm tracking-widest outline-none focus:border-brand-blue"
+                  />
+                  <p className="mt-1 text-[11px] text-navy-400">
+                    પેમેન્ટ પછી એપમાં "ટ્રાન્ઝેક્શન ID / UTR" મળશે — તે 12 અંક અહીં નાખો.
+                  </p>
+                </div>
+
+                <button
+                  onClick={verifyUtr}
+                  disabled={utr.length !== 12 || verifying}
+                  className="w-full rounded-xl bg-brand-green text-white py-3 text-sm font-extrabold hover:opacity-90 disabled:opacity-50"
+                >
+                  {verifying ? 'ચકાસી રહ્યા છીએ…' : 'પેમેન્ટ થઈ ગઈ — ચકાસો ✓'}
+                </button>
+                <button
+                  onClick={closeModal}
+                  className="w-full text-center text-xs text-navy-400 underline"
+                >
+                  રદ કરો
+                </button>
+                {error && <div className="rounded-xl bg-red-50 text-red-600 text-xs px-3 py-2">{error}</div>}
+              </>
+            ) : (
+              <div className="text-center space-y-3 py-2">
+                <div className="text-4xl">⏰</div>
+                <div className="font-bold text-navy-900">પેમેન્ટ સમય સમાપ્ત થયો</div>
+                <p className="text-xs text-navy-500">
+                  2 મિનિટ પૂરી થઈ. જો તમે પૈસા ચૂકવી દીધા હોય તો ચિંતા નહીં — ફરી શરૂ કરીને
+                  નવો UTR નાખો, બેવડી ચુકવણી થશે નહીં.
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={closeModal}
+                    className="flex-1 rounded-xl border border-navy-200 py-2.5 text-sm font-semibold text-navy-700 hover:bg-navy-50"
+                  >
+                    બંધ કરો
+                  </button>
+                  <button
+                    onClick={() => { closeModal(); startOrder() }}
+                    className="flex-1 rounded-xl bg-brand-orange text-white py-2.5 text-sm font-extrabold hover:bg-brand-orange-dark"
+                  >
+                    ફરી શરૂ કરો
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

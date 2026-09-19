@@ -22,7 +22,17 @@ export default function Profile() {
         <div className="w-16 h-16 mx-auto rounded-full bg-white/15 flex items-center justify-center text-2xl font-extrabold">
           {(user?.full_name || 'વિ').charAt(0)}
         </div>
-        <h1 className="mt-3 font-extrabold text-lg">{user?.full_name}</h1>
+        <h1 className="mt-3 font-extrabold text-lg flex items-center justify-center gap-2">
+          {user?.full_name}
+          {status?.is_premium && (
+            <span
+              title="Premium સભ્ય"
+              className="rounded-md bg-gradient-to-r from-amber-300 to-amber-400 text-navy-900 px-1.5 py-0.5 text-[10px] font-extrabold tracking-wide leading-none"
+            >
+              PRO
+            </span>
+          )}
+        </h1>
         <p className="text-xs text-white/70">{user?.email}</p>
         <div className="mt-2 flex justify-center gap-2">
           <span className="rounded-full bg-white/15 px-3 py-1 text-xs">ધોરણ {user?.standard}</span>

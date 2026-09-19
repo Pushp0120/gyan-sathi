@@ -50,10 +50,15 @@ class Settings(BaseSettings):
     premium_price_inr: int = 10
     premium_duration_days: int = 365
 
-    # Payments
+    # Payments — UPI QR manual flow (phone number readable from the QR itself)
+    upi_qr_payment_enabled: bool = True
+    upi_payee_name: str = "Gyan Sathi"
+    upi_payment_window_min: int = 2  # minutes a QR order stays payable
+
+    # Razorpay (optional alternative gateway; unused in UPI QR mode)
     razorpay_key_id: str = ""
     razorpay_key_secret: str = ""
-    payment_mode: str = "sandbox"  # sandbox | live
+    payment_mode: str = "upi_qr"  # upi_qr | sandbox | live
 
     # Direct email OTP (optional — enables auth without Supabase).
     # Two delivery paths: Brevo HTTPS API (BREVO_API_KEY, preferred on serverless —

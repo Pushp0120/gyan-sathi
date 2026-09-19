@@ -24,6 +24,11 @@ class PasswordLoginRequest(BaseModel):
     password: str
 
 
+class UpiVerifyRequest(BaseModel):
+    payment_id: str
+    utr: str = Field(min_length=6, max_length=30)
+
+
 class DirectSignupRequest(BaseModel):
     email: EmailStr
     password: str = Field(min_length=6, max_length=128)
