@@ -55,8 +55,10 @@ class Settings(BaseSettings):
     razorpay_key_secret: str = ""
     payment_mode: str = "sandbox"  # sandbox | live
 
-    # Google Sign-In (GIS button / One Tap). Empty client id → button hidden.
-    google_client_id: str = ""
+    # Google Sign-In (GIS button / One Tap). Client ID is a public identifier
+    # (safe to ship in code); override via env for other deployments.
+    # Empty client id → button hidden.
+    google_client_id: str = "841583770312-4c3kaq1l3fs2lm9abbc894pska0pjdlq.apps.googleusercontent.com"
 
     # Direct email OTP (optional — enables auth without Supabase).
     # Two delivery paths: Brevo HTTPS API (BREVO_API_KEY, preferred on serverless —
