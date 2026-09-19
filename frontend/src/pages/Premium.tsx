@@ -178,7 +178,13 @@ export default function Premium() {
       )}
 
       {message && <div className="mt-3 rounded-xl bg-green-50 text-green-700 text-sm px-3 py-2.5 text-center">{message}</div>}
-      {error && !order && <div className="mt-3 rounded-xl bg-red-50 text-red-600 text-xs px-3 py-2">{error}</div>}
+      {error && !order && (
+        <div className="mt-3 rounded-xl bg-red-50 border border-red-200 text-red-600 text-sm px-3 py-2.5 flex items-start gap-2">
+          <span className="shrink-0">⚠️</span>
+          <div className="flex-1">પેમેન્ટ શરૂ કરી શકાયો નથી: {error}</div>
+          <button onClick={() => setError('')} className="shrink-0 text-red-400 hover:text-red-600">✕</button>
+        </div>
+      )}
 
       <p className="mt-4 text-center text-[11px] text-navy-300">
         ચુકવણી પછી UPI રેફરન્સ (UTR) નંબર નાખો — ચકાસણી પછી Premium તરત સક્રિય થશે.

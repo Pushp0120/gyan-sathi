@@ -30,7 +30,9 @@ def subscription_create(body: SubscriptionCreateRequest,
     plan = db.query(Plan).filter(Plan.code == body.plan_code, Plan.is_active == True).first()  # noqa: E712
     if not plan:
         raise HTTPException(404, "પ્લાન મળ્યો નથી.")
-    if settings.payment_mode == "upi_qr":
+    # UPI QR is the default flow unless Razorpay live mode is explicitly on.
+    # (A stale PAYMENT_MODE=sandbox env var must never silently disable the QR.)
+    if settings.upi_qr_payment_enabled and settings.payment_mode != "live":
         return create_upi_order(db, user.id, plan)
     order = create_order(db, user.id, plan)
     return order
