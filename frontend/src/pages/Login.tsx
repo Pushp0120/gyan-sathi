@@ -85,6 +85,7 @@ export default function Login() {
         { method: 'POST', body: JSON.stringify({ email, otp }) }
       )
       loginWithToken(res.access_token, res.user)
+      setMode('password') // show the new-password screen (it renders under mode === 'password')
       setResetDone(true)
       setOtpSent(false)
       setInfo('')
@@ -369,7 +370,7 @@ export default function Login() {
                 {busy ? 'લોગ ઇન થાય છે…' : 'એડમિન લોગ ઇન'}
               </button>
             </div>
-          )}          {mode !== 'admin' && !otpSent && (
+          )}          {mode !== 'admin' && !otpSent && !resetDone && (
             <div className="text-center text-sm text-navy-500 pt-1">
               એકદમ નવા છો?{' '}
               <Link to="/signup" className="text-base font-bold text-brand-blue">
