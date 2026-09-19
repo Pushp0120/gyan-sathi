@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Eye, EyeOff, KeyRound, Lock, Mail, ShieldCheck, Timer, UserRound } from 'lucide-react'
 import Logo from '../components/Logo'
-import GoogleSignInButton from '../components/GoogleSignInButton'
 import { api } from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
 import type { User } from '../types'
@@ -131,10 +130,6 @@ export default function Login() {
     } finally {
       setBusy(false)
     }
-  }
-
-  const handleGoogleSuccess = (user: User, needsOnboarding: boolean) => {
-    navigate(user.role === 'admin' ? '/admin' : needsOnboarding ? '/onboarding' : '/dashboard')
   }
 
   return (
@@ -378,18 +373,13 @@ export default function Login() {
                 {busy ? 'લોગ ઇન થાય છે…' : 'એડમિન લોગ ઇન'}
               </button>
             </div>
-          )}
-
-          {mode !== 'admin' && !otpSent && (
-            <>
-              <div className="text-center text-sm text-navy-500 pt-1">
-                એકદમ નવા છો?{' '}
-                <Link to="/signup" className="text-base font-bold text-brand-blue">
-                  સાઇન અપ કરો
-                </Link>
-              </div>
-              <GoogleSignInButton onSuccess={handleGoogleSuccess} text="continue_with" />
-            </>
+          )}          {mode !== 'admin' && !otpSent && (
+            <div className="text-center text-sm text-navy-500 pt-1">
+              એકદમ નવા છો?{' '}
+              <Link to="/signup" className="text-base font-bold text-brand-blue">
+                સાઇન અપ કરો
+              </Link>
+            </div>
           )}
 
           <div className="pt-1 border-t border-navy-100">

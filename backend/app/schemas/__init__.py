@@ -24,10 +24,6 @@ class PasswordLoginRequest(BaseModel):
     password: str
 
 
-class GoogleAuthRequest(BaseModel):
-    credential: str  # Google ID token (JWT) from GIS button / One Tap
-
-
 class DirectSignupRequest(BaseModel):
     email: EmailStr
     password: str = Field(min_length=6, max_length=128)

@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Eye, EyeOff, Lock, Mail } from 'lucide-react'
 import Logo from '../components/Logo'
-import GoogleSignInButton from '../components/GoogleSignInButton'
 import { api } from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
 import type { User } from '../types'
@@ -43,10 +42,6 @@ export default function Signup() {
     } finally {
       setBusy(false)
     }
-  }
-
-  const handleGoogleSuccess = (user: User, needsOnboarding: boolean) => {
-    navigate(user.role === 'admin' ? '/admin' : needsOnboarding ? '/onboarding' : '/dashboard')
   }
 
   return (
@@ -124,7 +119,6 @@ export default function Signup() {
               લોગ ઇન
             </Link>
           </div>
-          <GoogleSignInButton onSuccess={handleGoogleSuccess} />
           {error && <div className="rounded-xl bg-red-50 text-red-600 text-xs px-3 py-2">{error}</div>}
         </div>
       </div>
