@@ -6,6 +6,7 @@ import LoadingScreen from './components/LoadingScreen'
 
 const Login = lazy(() => import('./pages/Login'))
 const Signup = lazy(() => import('./pages/Signup'))
+const Intro = lazy(() => import('./pages/Intro'))
 const Onboarding = lazy(() => import('./pages/Onboarding'))
 const Dashboard = lazy(() => import('./pages/Dashboard'))
 const Chat = lazy(() => import('./pages/Chat'))
@@ -47,6 +48,7 @@ export default function App() {
       <BrowserRouter>
         <Suspense fallback={<LoadingScreen />}>
         <Routes>
+          <Route path="/" element={<Intro />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
           <Route path="/onboarding" element={<Onboarding />} />
@@ -79,7 +81,7 @@ export default function App() {
             <Route path="analytics" element={<AdminAnalytics />} />
           </Route>
 
-          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         </Suspense>
       </BrowserRouter>
