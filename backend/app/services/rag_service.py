@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.services import cache_service
 from app.services.embedding_service import embed_query
+from app.utils.text_sanitizer import sanitize_gujarati
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -165,7 +166,7 @@ def build_rag_context(chunks: list[dict]) -> tuple[str, list[dict]]:
         if c.get("section"):
             header_bits.append(c["section"])
         header = " → ".join(header_bits) or "સંદર્ભ"
-        parts.append(f"[{i}] {header}\n{c['content']}")
+        parts.append(f"[{i}] {header}\n{sanitize_gujarati(c['content'])}")
         sources.append({
             "index": i,
             "standard": c.get("standard"),

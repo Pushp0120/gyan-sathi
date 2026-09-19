@@ -17,6 +17,7 @@ from app.prompts.gujarati_tutor import build_system_prompt, build_user_context
 from app.schemas import ChatRequest, FeedbackRequest, ChatTitleRequest
 from app.services import cache_service, usage_service
 from app.services.ai_service import choose_model, get_ai_provider
+from app.utils.text_sanitizer import sanitize_gujarati
 from app.services.rag_service import build_rag_context, detect_filters, rag_retrieval_score, retrieve_chunks
 
 logger = logging.getLogger(__name__)
@@ -127,7 +128,8 @@ def chat(body: ChatRequest, user: User = Depends(get_current_user), db: Session 
             cache_service.cache_set("ai_answer", cache_key,
                                     {"content": answer, "sources": sources_out})
 
-    # --- persist
+    # --- persist (sanitize any mixed-script slips before storing)
+    answer = sanitize_gujarati(answer)
     user_msg = Message(conversation_id=conv.id, role="user", content=body.message,
                        mode=body.mode)
     ai_msg = Message(conversation_id=conv.id, role="assistant", content=answer,
@@ -201,6 +203,7 @@ def chat_stream(body: ChatRequest, user: User = Depends(get_current_user),
             stream = get_ai_provider().chat(messages, model=model, temperature=0.35,
                                             max_tokens=1800, stream=True)
             for piece in stream:
+                piece = sanitize_gujarati(piece)  # per-chunk; mapping is per-codepoint so chunk boundaries are safe
                 full.append(piece)
                 yield "data: " + json.dumps({"type": "delta", "content": piece},
                                             ensure_ascii=False) + "\n\n"
@@ -210,7 +213,7 @@ def chat_stream(body: ChatRequest, user: User = Depends(get_current_user),
                                          "content": "કંઈક સમસ્યા આવી છે. થોડીવાર પછી ફરી પ્રયાસ કરો."},
                                         ensure_ascii=False) + "\n\n"
         finally:
-            answer = "".join(full)
+            answer = sanitize_gujarati("".join(full))
             if answer:
                 user_msg = Message(conversation_id=conv.id, role="user", content=body.message,
                                    mode=body.mode)

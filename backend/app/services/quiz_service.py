@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.models.quiz import QuizQuestion
 from app.services.ai_service import choose_model, get_ai_provider
 from app.services.rag_service import build_rag_context, retrieve_chunks
+from app.utils.text_sanitizer import sanitize_gujarati
 
 logger = logging.getLogger(__name__)
 
@@ -82,7 +83,7 @@ def generate_quiz(db: Session, standard: int, subject_id: str | None,
         temperature=0.4,
         max_tokens=2000,
     )
-    questions = _parse_questions(resp["content"])[:count]
+    questions = _parse_questions(sanitize_gujarati(resp["content"]))[:count]
     if not questions:
         raise RuntimeError("ક્વિઝ બનાવવામાં સમસ્યા આવી. ફરી પ્રયાસ કરો.")
 

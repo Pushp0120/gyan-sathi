@@ -5,6 +5,7 @@ from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, Integer, St
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base, JSONType
+from app.utils.text_sanitizer import sanitize_gujarati
 from app.utils.time import utcnow
 
 
@@ -30,7 +31,7 @@ class Conversation(Base):
     def to_dict(self, with_messages: bool = False) -> dict:
         d = {
             "id": self.id,
-            "title": self.title,
+            "title": sanitize_gujarati(self.title),
             "standard": self.standard,
             "subject_id": self.subject_id,
             "chapter_id": self.chapter_id,
@@ -64,10 +65,11 @@ class Message(Base):
     )
 
     def to_dict(self) -> dict:
+        # Sanitize on read so answers saved before mixed-script guarding still render clean.
         return {
             "id": self.id,
             "role": self.role,
-            "content": self.content,
+            "content": sanitize_gujarati(self.content),
             "mode": self.mode,
             "sources": self.sources or [],
             "used_rag": bool(self.used_rag),
