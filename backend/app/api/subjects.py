@@ -12,18 +12,31 @@ from app.core.security import get_current_user
 
 router = APIRouter(prefix="/api", tags=["subjects"])
 
-# Official GCERT/GSEB Std 10 textbooks (Gujarati medium), stored on Vercel Blob.
-# Keyed by lowercase subject name; ICT is served the Computer Studies book.
+# Official GCERT/GSEB Std 10 textbooks (Gujarati medium), hosted on
+# Google Drive. Each entry is a Drive FILE_ID; the API returns an embed
+# link (used by the in-app reader iframe) and a download link.
+# Keyed by lowercase subject name; ICT uses the Computer Studies book.
+# To swap a book: replace the FILE_ID with the new file's Drive ID.
 TEXTBOOK_PDFS: dict[str, str] = {
-    "mathematics": "https://vovzjthjoeh5pzui.public.blob.vercel-storage.com/std10-mathematics.pdf",
-    "science": "https://vovzjthjoeh5pzui.public.blob.vercel-storage.com/std10-science.pdf",
-    "social science": "https://vovzjthjoeh5pzui.public.blob.vercel-storage.com/std10-social-science.pdf",
-    "gujarati": "https://vovzjthjoeh5pzui.public.blob.vercel-storage.com/std10-gujarati.pdf",
-    "english": "https://vovzjthjoeh5pzui.public.blob.vercel-storage.com/std10-english.pdf",
-    "hindi": "https://vovzjthjoeh5pzui.public.blob.vercel-storage.com/std10-hindi.pdf",
-    "sanskrit": "https://vovzjthjoeh5pzui.public.blob.vercel-storage.com/std10-sanskrit.pdf",
-    "ict": "https://vovzjthjoeh5pzui.public.blob.vercel-storage.com/std10-computer-studies.pdf",
+    "mathematics": "DRIVE_FILE_ID_mathematics",
+    "science": "DRIVE_FILE_ID_science",
+    "social science": "DRIVE_FILE_ID_social_science",
+    "gujarati": "DRIVE_FILE_ID_gujarati",
+    "english": "DRIVE_FILE_ID_english",
+    "hindi": "DRIVE_FILE_ID_hindi",
+    "sanskrit": "DRIVE_FILE_ID_sanskrit",
+    "ict": "DRIVE_FILE_ID_ict",
 }
+
+
+def _drive_embed_url(file_id: str) -> str:
+    """Drive viewer URL suitable for embedding in an iframe."""
+    return f"https://drive.google.com/file/d/{file_id}/preview"
+
+
+def _drive_download_url(file_id: str) -> str:
+    """Direct download URL for a Drive file."""
+    return f"https://drive.google.com/uc?export=download&id={file_id}"
 
 
 @router.get("/subjects")
@@ -86,9 +99,16 @@ def chapter_content(chapter_id: str, db: Session = Depends(get_db),
 @router.get("/subjects/{subject_id}/textbook")
 def subject_textbook(subject_id: str, db: Session = Depends(get_db),
                      user: User = Depends(get_current_user)):
-    """Full official textbook PDF for a subject (served from Vercel Blob CDN)."""
+    """Full official textbook PDF for a subject (hosted on Google Drive)."""
     subj = db.query(Subject).filter(Subject.id == subject_id, Subject.is_active == True).first()  # noqa: E712
     if not subj:
         raise HTTPException(404, "વિષય મળ્યો નથી.")
-    pdf_url = TEXTBOOK_PDFS.get((subj.name_en or "").strip().lower())
-    return {"subject": subj.to_dict(), "pdf_url": pdf_url}
+    file_id = TEXTBOOK_PDFS.get((subj.name_en or "").strip().lower())
+    if not file_id or file_id.startswith("DRIVE_FILE_ID_"):
+        # Not configured yet (or placeholder) — frontend shows a friendly message.
+        return {"subject": subj.to_dict(), "pdf_url": None, "download_url": None}
+    return {
+        "subject": subj.to_dict(),
+        "pdf_url": _drive_embed_url(file_id),
+        "download_url": _drive_download_url(file_id),
+    }

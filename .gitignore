@@ -49,6 +49,8 @@ reference-chatbot/
 tsconfig.tsbuildinfo
 .vercel
 .env*
+!.env.example
+!**/.env.example
 
 # bulk import run artifacts
 textbook_import_state.json
