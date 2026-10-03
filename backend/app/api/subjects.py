@@ -18,14 +18,14 @@ router = APIRouter(prefix="/api", tags=["subjects"])
 # Keyed by lowercase subject name; ICT uses the Computer Studies book.
 # To swap a book: replace the FILE_ID with the new file's Drive ID.
 TEXTBOOK_PDFS: dict[str, str] = {
-    "mathematics": "DRIVE_FILE_ID_mathematics",
-    "science": "DRIVE_FILE_ID_science",
-    "social science": "DRIVE_FILE_ID_social_science",
-    "gujarati": "DRIVE_FILE_ID_gujarati",
-    "english": "DRIVE_FILE_ID_english",
-    "hindi": "DRIVE_FILE_ID_hindi",
-    "sanskrit": "DRIVE_FILE_ID_sanskrit",
-    "ict": "DRIVE_FILE_ID_ict",
+    "mathematics": "1oMG5TK1AJXoYt5KYzmJlXoDQYoGDa-sY",
+    "science": "183xOEaxK9HzWf1dbFTCNgPqqg58P2ovI",
+    "social science": "1-Gng2JOtCrtifyWi6RPAUbOow5-sDdoB",
+    "gujarati": "1M8lpCqt9JkoDKJkcs1AOI-NhO09h45mm",
+    "english": "1UPXxXTIbRSWa-BC3YVRMP6sOK57KMHXx",
+    "hindi": "18LZAAoQO15h2l8CxYIOuFPoGJDt4N7_O",
+    "sanskrit": "1j4t7rH7RwoGFXwnepwKCR-qlCC90BDKL",
+    "ict": "12zafbTYgmsIr-Vrl8ap2472_hA9SzN0U",
 }
 
 
