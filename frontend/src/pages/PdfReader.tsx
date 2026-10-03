@@ -1,9 +1,17 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { ChevronLeft, BookOpen, Download, RotateCw } from 'lucide-react'
 import { api } from '../services/api'
 import type { Subject } from '../types'
 import FloatingChat from '../components/FloatingChat'
+
+// Drive's working viewer builds nested frames (iframe.contentWindow.length > 0),
+// while its "Could not preview the file" error page stays at 0. `length` is one
+// of the few members readable across origins, so the watchdog below can detect
+// a failed viewer and remount the iframe automatically.
+const MAX_AUTO_RETRIES = 3
+const WATCH_POLL_MS = 600
+const WATCH_WINDOW_MS = 10000 // remount only after this much CONTINUOUS failure time
 
 export default function PdfReader() {
   const { subjectId } = useParams()
@@ -13,12 +21,15 @@ export default function PdfReader() {
   const [loading, setLoading] = useState(true)
   const [failed, setFailed] = useState(false)
   const [iframeKey, setIframeKey] = useState(0)
+  const iframeRef = useRef<HTMLIFrameElement | null>(null)
+  const attemptRef = useRef(0)
 
   // Fetch the subject's textbook embed URL (hosted on Google Drive)
   useEffect(() => {
     if (!subjectId) return
     setLoading(true)
     setFailed(false)
+    attemptRef.current = 0
     api<{ subject: Subject; pdf_url: string | null; download_url: string | null }>(
       `/api/subjects/${subjectId}/textbook`
     )
@@ -32,6 +43,53 @@ export default function PdfReader() {
       .catch(() => setFailed(true))
       .finally(() => setLoading(false))
   }, [subjectId])
+
+  // Watchdog: if the Drive viewer error page is up, its window reports 0 nested
+  // frames — and keeps reporting 0. A healthy viewer always reports > 0. So we
+  // keep watching for the book's whole lifetime and remount the iframe whenever
+  // frames have stayed at 0 continuously for WATCH_WINDOW_MS (up to
+  // MAX_AUTO_RETRIES consecutive times), so students never see the error.
+  useEffect(() => {
+    if (!pdfUrl) return
+    let cancelled = false
+    let timer: number | undefined
+    let zeroSince: number | null = null
+
+    const tick = () => {
+      if (cancelled) return
+      let frames = -1
+      try {
+        frames = iframeRef.current?.contentWindow
+          ? iframeRef.current.contentWindow.length
+          : -1
+      } catch {
+        frames = -1
+      }
+      if (frames > 0) {
+        // Healthy — clear the failure clock and restore the retry budget.
+        zeroSince = null
+        attemptRef.current = 0
+      } else {
+        const now = Date.now()
+        if (zeroSince === null) zeroSince = now
+        if (now - zeroSince >= WATCH_WINDOW_MS) {
+          if (attemptRef.current < MAX_AUTO_RETRIES) {
+            attemptRef.current += 1
+            zeroSince = null
+            setIframeKey((k) => k + 1) // fresh iframe = fresh viewer session
+          }
+          // else: stop retrying; the manual 🔄 button remains
+        }
+      }
+      timer = window.setTimeout(tick, WATCH_POLL_MS)
+    }
+    timer = window.setTimeout(tick, WATCH_POLL_MS)
+
+    return () => {
+      cancelled = true
+      if (timer) clearTimeout(timer)
+    }
+  }, [pdfUrl, iframeKey])
 
   return (
     <div className="h-[calc(100dvh-3.5rem)] flex flex-col">
@@ -50,7 +108,10 @@ export default function PdfReader() {
         </div>
         {pdfUrl && (
           <button
-            onClick={() => setIframeKey((k) => k + 1)}
+            onClick={() => {
+              attemptRef.current = 0
+              setIframeKey((k) => k + 1)
+            }}
             className="p-1.5 rounded-lg hover:bg-slate-100 text-navy-500"
             aria-label="ફરી ખોલો"
             title="ફરી ખોલો"
@@ -90,6 +151,7 @@ export default function PdfReader() {
         {!loading && !failed && pdfUrl && (
           <iframe
             key={iframeKey}
+            ref={iframeRef}
             src={pdfUrl}
             title={subject?.name_gu || 'પાઠ્યપુસ્તક'}
             className="w-full h-full border-0"
