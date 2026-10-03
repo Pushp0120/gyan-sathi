@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { ChevronLeft, BookOpen, Download } from 'lucide-react'
+import { ChevronLeft, BookOpen, Download, RotateCw } from 'lucide-react'
 import { api } from '../services/api'
 import type { Subject } from '../types'
 import FloatingChat from '../components/FloatingChat'
@@ -12,6 +12,7 @@ export default function PdfReader() {
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [failed, setFailed] = useState(false)
+  const [iframeKey, setIframeKey] = useState(0)
 
   // Fetch the subject's textbook embed URL (hosted on Google Drive)
   useEffect(() => {
@@ -47,6 +48,16 @@ export default function PdfReader() {
             📕 {subject?.name_gu || 'પાઠ્યપુસ્તક'} · ધોરણ 10
           </div>
         </div>
+        {pdfUrl && (
+          <button
+            onClick={() => setIframeKey((k) => k + 1)}
+            className="p-1.5 rounded-lg hover:bg-slate-100 text-navy-500"
+            aria-label="ફરી ખોલો"
+            title="ફરી ખોલો"
+          >
+            <RotateCw size={16} />
+          </button>
+        )}
         {downloadUrl && (
           <a
             href={downloadUrl}
@@ -78,6 +89,7 @@ export default function PdfReader() {
         )}
         {!loading && !failed && pdfUrl && (
           <iframe
+            key={iframeKey}
             src={pdfUrl}
             title={subject?.name_gu || 'પાઠ્યપુસ્તક'}
             className="w-full h-full border-0"
