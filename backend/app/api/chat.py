@@ -13,6 +13,7 @@ from app.models.conversation import Conversation, Message
 from app.models.subject import Subject
 from app.models.chapter import Chapter
 from app.models.user import User
+from app.models.upload import Upload
 from app.prompts.gujarati_tutor import build_system_prompt, build_user_context
 from app.schemas import ChatRequest, FeedbackRequest, ChatTitleRequest
 from app.services import cache_service, usage_service
@@ -25,6 +26,43 @@ settings = get_settings()
 router = APIRouter(prefix="/api", tags=["chat"])
 
 MAX_HISTORY_MESSAGES = 10
+# Groq's free tier caps request payloads; trim RAG context so big textbook
+# chunks don't blow past it (HTTP 413).
+RAG_CONTEXT_CHAR_LIMIT = 14000
+# Cap for text of files the student attached to a chat question.
+MAX_UPLOAD_CONTEXT_CHARS = 6000
+
+
+def _trim_context(text: str, limit: int = RAG_CONTEXT_CHAR_LIMIT) -> str:
+    if len(text) <= limit:
+        return text
+    cut = text[:limit]
+    # Prefer ending at a chunk boundary: last paragraph separator.
+    brk = cut.rfind("\n\n")
+    if brk > limit * 0.6:
+        cut = cut[:brk]
+    return cut + "\n\n(સંદર્ભ સામગ્રી ટૂંકી કરવામાં આવી છે)"
+
+
+def _get_upload_context(db: Session, user: User, upload_ids: list[str] | None) -> str:
+    """Extracted text of files the student attached to this question (PDF/DOCX/TXT)."""
+    if not upload_ids:
+        return ""
+    rows = (
+        db.query(Upload)
+        .filter(Upload.id.in_(upload_ids[:3]), Upload.student_id == user.id,
+                Upload.is_deleted == False)  # noqa: E712
+        .all()
+    )
+    parts = []
+    for u in rows:
+        txt = (u.extracted_text or "").strip()
+        if txt:
+            parts.append(f"ફાઇલ: {u.original_name}\n{txt[:MAX_UPLOAD_CONTEXT_CHARS]}")
+    if not parts:
+        return ""
+    return ("વિદ્યાર્થીએ આ ફાઇલ(ઓ) અપલોડ કરી છે — તેમાં આપેલી માહિતીના આધારે જ જવાબ આપો:\n\n"
+            + "\n\n".join(parts))
 
 
 def _get_owned_conversation(db: Session, user: User, conversation_id: str | None, create: bool = True):
@@ -67,6 +105,9 @@ def _build_messages(db: Session, user: User, conv: Conversation, body: ChatReque
         ctx += "\n\n" + context_text
     if sources_note:
         ctx += "\n\n" + sources_note
+    upload_text = _get_upload_context(db, user, body.upload_ids)
+    if upload_text:
+        ctx += "\n\n" + upload_text
     messages.append({"role": "system", "content": ctx})
 
     history = (
@@ -98,6 +139,7 @@ def chat(body: ChatRequest, user: User = Depends(get_current_user), db: Session 
     chunks = retrieve_chunks(db, body.message, filters["standard"],
                              body.subject_id or conv.subject_id, body.chapter_id or conv.chapter_id)
     context_text, sources = build_rag_context(chunks)
+    context_text = _trim_context(context_text)
     score = rag_retrieval_score(chunks)
     sources_note = (
         "સૂચના: ઉપરની સંદર્ભ સામગ્રી પૂરતી નથી. જો જવાબ આપો તો સ્પષ્ટ લખો કે આ સામાન્ય સમજૂતી છે, "
@@ -193,6 +235,7 @@ def chat_stream(body: ChatRequest, user: User = Depends(get_current_user),
     chunks = retrieve_chunks(db, body.message, filters["standard"],
                              body.subject_id or conv.subject_id, body.chapter_id or conv.chapter_id)
     context_text, sources = build_rag_context(chunks)
+    context_text = _trim_context(context_text)
     score = rag_retrieval_score(chunks)
     messages, _ = _build_messages(db, user, conv, body, context_text, "")
     model = choose_model(body.mode)

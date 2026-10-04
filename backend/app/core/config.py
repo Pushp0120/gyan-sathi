@@ -24,9 +24,11 @@ class Settings(BaseSettings):
     redis_url: str = ""
 
     # AI provider
-    ai_provider: str = "nvidia"
+    ai_provider: str = "nvidia"  # nvidia | groq
     nvidia_api_key: str = ""
     nvidia_base_url: str = "https://integrate.api.nvidia.com/v1"
+    groq_api_key: str = ""
+    groq_base_url: str = "https://api.groq.com/openai/v1"
     ai_model: str = "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning"
     ai_model_advanced: str = "nvidia/nemotron-3-super-120b-a12b"
     ai_embedding_model: str = "nvidia/nemotron-3-embed-1b"

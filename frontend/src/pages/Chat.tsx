@@ -37,6 +37,7 @@ export default function Chat() {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [streaming, setStreaming] = useState(false)
   const [uploadInfo, setUploadInfo] = useState<string>('')
+  const [uploadIds, setUploadIds] = useState<string[]>([])
   const fileRef = useRef<HTMLInputElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
 
@@ -87,6 +88,11 @@ export default function Chat() {
       const question = (text ?? input).trim()
       if (!question || streaming) return
       setInput('')
+      const attachedIds = uploadIds
+      if (attachedIds.length) {
+        setUploadIds([])
+        setUploadInfo('')
+      }
       setStreaming(true)
 
       const userMsg: ChatMessage = {
@@ -107,6 +113,7 @@ export default function Chat() {
           mode,
           subject_id: subjectId || null,
           chapter_id: chapterId || null,
+          upload_ids: attachedIds,
         },
         (delta) => {
           setMessages((m) =>
@@ -138,7 +145,7 @@ export default function Chat() {
         }
       )
     },
-    [input, streaming, mode, conversationId, subjectId, chapterId, navigate]
+    [input, streaming, mode, conversationId, subjectId, chapterId, uploadIds, navigate]
   )
 
   const regenerate = () => {
@@ -159,6 +166,7 @@ export default function Chat() {
     fd.append('file', file)
     try {
       const res = await api<{ upload: any; allowance: any }>('/api/uploads', { method: 'POST', body: fd })
+      setUploadIds((ids) => [...ids, res.upload.id].slice(-3))
       setUploadInfo(`✓ ${file.name} અપલોડ થયું (વપરાયેલ ${res.allowance.used}/${res.allowance.limit})`)
       setInput((prev) => prev || 'આ ફાઇલનું વિશ્લેષણ કરીને સમજાવો.')
     } catch (e: any) {
