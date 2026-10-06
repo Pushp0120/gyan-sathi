@@ -20,6 +20,7 @@ deltas as well as whole answers. The character map is built from
 
 from __future__ import annotations
 
+import re
 import unicodedata
 
 # ---------------------------------------------------------------------------
@@ -154,3 +155,37 @@ def sanitize_gujarati(text: str | None) -> str:
             continue
         out.append(ch)
     return "".join(out)
+
+
+# Latin letters glued straight onto a Gujarati word with no space, e.g.
+# "સંસાધનACHE" — a model glitch (a Marathi/Hindi suffix leaking out in Latin
+# letters). Legit English terms are always separated by a space or bracket, so
+# a Latin run attached to a Gujarati letter is junk. Gujarati digits are
+# excluded so "૫cm" style units survive.
+_ATTACHED_LATIN = re.compile(r"(?<=[\u0A80-\u0AE5\u0AF0-\u0AFF])[A-Za-z]{2,}")
+
+# Hindi/Marathi function words that survive char-mapping as fake Gujarati.
+# Only entries that are NOT valid Gujarati words are listed here.
+_HINDI_WORDS = {
+    "ઔર": "અને",
+    "હૈ": "છે",
+    "હૈં": "છે",
+    "મેં": "માં",
+    "લેકિન": "પરંતુ",
+    "ક્યોંકિ": "કારણ કે",
+    "ક્યોંકી": "કારણ કે",
+}
+_HINDI_RE = re.compile(
+    r"(?<![\u0A80-\u0AFF])(" + "|".join(map(re.escape, _HINDI_WORDS)) + r")(?![\u0A80-\u0AFF])"
+)
+
+
+def clean_mixed_tokens(text: str | None) -> str:
+    """Final-answer cleanup: drop glued Latin junk and fix leaked Hindi words.
+
+    Not safe for streaming deltas (needs whole words) — apply to full answers.
+    """
+    if not text:
+        return text or ""
+    text = _ATTACHED_LATIN.sub("", text)
+    return _HINDI_RE.sub(lambda m: _HINDI_WORDS[m.group(1)], text)

@@ -76,6 +76,21 @@ body {
   background: transparent;
 }
 
+/* Gujarati inside math ($...$ / \\text{...}) must not use KaTeX's Latin-only fonts,
+   otherwise those glyphs render as blanks/boxes. */
+.katex,
+.katex .mord,
+.katex .text,
+.katex .textrm,
+.katex .mathrm,
+.katex .mtight {
+  font-family: 'Noto Sans Gujarati', 'Shruti', 'Nirmala UI', KaTeX_Main, 'Times New Roman', serif;
+}
+.katex .mathnormal,
+.katex .mathit {
+  font-family: KaTeX_Math, 'Noto Sans Gujarati', 'Shruti', 'Nirmala UI', serif;
+}
+
 /* KaTeX display blocks scroll on mobile */
 .katex-display {
   overflow-x: auto;

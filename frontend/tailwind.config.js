@@ -26,7 +26,7 @@ export default {
         },
       },
       fontFamily: {
-        sans: ['Noto Sans Gujarati', 'Inter', 'system-ui', 'sans-serif'],
+        sans: ['Noto Sans Gujarati', 'Inter', 'Shruti', 'Nirmala UI', 'Lohit Gujarati', 'Arial Unicode MS', 'system-ui', 'sans-serif'],
       },
       boxShadow: {
         card: '0 2px 12px rgba(18, 41, 72, 0.08)',

@@ -18,7 +18,7 @@ from app.prompts.gujarati_tutor import build_system_prompt, build_user_context
 from app.schemas import ChatRequest, FeedbackRequest, ChatTitleRequest
 from app.services import cache_service, usage_service
 from app.services.ai_service import choose_model, get_ai_provider
-from app.utils.text_sanitizer import sanitize_gujarati
+from app.utils.text_sanitizer import clean_mixed_tokens, sanitize_gujarati
 from app.services.rag_service import build_rag_context, detect_filters, rag_retrieval_score, retrieve_chunks
 
 logger = logging.getLogger(__name__)
@@ -160,7 +160,7 @@ def chat(body: ChatRequest, user: User = Depends(get_current_user), db: Session 
         messages, _ = _build_messages(db, user, conv, body, context_text, sources_note)
         provider = get_ai_provider()
         try:
-            resp = provider.chat(messages, model=choose_model(body.mode), temperature=0.35,
+            resp = provider.chat(messages, model=choose_model(body.mode), temperature=0.2,
                                  max_tokens=1800)
         except (TimeoutError, RuntimeError) as exc:
             raise HTTPException(503, str(exc))
@@ -171,7 +171,7 @@ def chat(body: ChatRequest, user: User = Depends(get_current_user), db: Session 
                                     {"content": answer, "sources": sources_out})
 
     # --- persist (sanitize any mixed-script slips before storing)
-    answer = sanitize_gujarati(answer)
+    answer = clean_mixed_tokens(sanitize_gujarati(answer))
     user_msg = Message(conversation_id=conv.id, role="user", content=body.message,
                        mode=body.mode)
     ai_msg = Message(conversation_id=conv.id, role="assistant", content=answer,
@@ -243,7 +243,7 @@ def chat_stream(body: ChatRequest, user: User = Depends(get_current_user),
     def gen():
         full = []
         try:
-            stream = get_ai_provider().chat(messages, model=model, temperature=0.35,
+            stream = get_ai_provider().chat(messages, model=model, temperature=0.2,
                                             max_tokens=1800, stream=True)
             for piece in stream:
                 piece = sanitize_gujarati(piece)  # per-chunk; mapping is per-codepoint so chunk boundaries are safe
@@ -256,7 +256,7 @@ def chat_stream(body: ChatRequest, user: User = Depends(get_current_user),
                                          "content": "કંઈક સમસ્યા આવી છે. થોડીવાર પછી ફરી પ્રયાસ કરો."},
                                         ensure_ascii=False) + "\n\n"
         finally:
-            answer = sanitize_gujarati("".join(full))
+            answer = clean_mixed_tokens(sanitize_gujarati("".join(full)))
             if answer:
                 user_msg = Message(conversation_id=conv.id, role="user", content=body.message,
                                    mode=body.mode)

@@ -9,6 +9,7 @@ from app.models.knowledge import KnowledgeChunk, KnowledgeDocument
 from app.models.subject import Subject
 from app.models.user import User
 from app.core.security import get_current_user
+from app.utils.text_sanitizer import sanitize_gujarati
 
 router = APIRouter(prefix="/api", tags=["subjects"])
 
@@ -92,7 +93,7 @@ def chapter_content(chapter_id: str, db: Session = Depends(get_db),
     return {
         "chapter": chapter.to_dict(),
         "subject": subject.to_dict() if subject else None,
-        "sections": [c.content for c in chunks],
+        "sections": [sanitize_gujarati(c.content) for c in chunks],
     }
 
 
